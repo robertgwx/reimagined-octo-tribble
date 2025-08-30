@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atlantic Forecast Regions</title>
+    <title>Atlantic Forecast Regions Wind Warnings</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- LeafletJS for the interactive map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Leaflet.pattern for hatching -->
+    <script src="https://unpkg.com/leaflet.pattern/dist/leaflet.pattern.js"></script>
     <style>
         /* Set a specific height for the map container */
         #map { 
@@ -29,7 +31,10 @@
         .leaflet-popup-content {
             margin: 14px 20px;
             font-size: 14px;
-            font-weight: 600;
+        }
+        .leaflet-popup-content b {
+            font-weight: 700;
+            color: #1f2937;
         }
         .leaflet-popup-tip-container {
             width: 40px;
@@ -49,11 +54,49 @@
     <!-- Main Map Container -->
     <div id="map" class="relative z-0"></div>
 
-    <!-- Header Overlay -->
-    <div class="absolute top-0 left-0 right-0 p-4 z-10 pointer-events-none">
-        <div class="max-w-md mx-auto bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 text-center">
-            <h1 class="text-2xl font-bold text-gray-800">Atlantic Forecast Regions</h1>
-            <p class="text-sm text-gray-600 mt-1">Visualizing GML data from GitHub Pages</p>
+    <!-- Control Panel Overlay -->
+    <div class="absolute top-4 left-4 p-4 z-[1000]">
+        <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 w-72">
+            <h1 class="text-xl font-bold text-gray-800">Wind Warning Control</h1>
+            <div class="mt-4 space-y-4">
+                <div>
+                    <label for="sustained-wind-input" class="block text-sm font-medium text-gray-700">Sustained Wind (km/h)</label>
+                    <input type="number" id="sustained-wind-input" placeholder="e.g., 70" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+                </div>
+                 <div>
+                    <label for="gust-wind-input" class="block text-sm font-medium text-gray-700">Gust Wind (km/h)</label>
+                    <input type="number" id="gust-wind-input" placeholder="e.g., 100" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2">
+                </div>
+            </div>
+            <div class="mt-4 flex space-x-2">
+                <button id="update-map-btn" class="flex-1 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300">
+                    Update Map
+                </button>
+                 <button id="clear-map-btn" class="flex-1 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors duration-300">
+                    Clear
+                </button>
+            </div>
+            <div class="mt-6">
+                <h2 class="text-lg font-semibold text-gray-700">Legend</h2>
+                <div class="mt-2 space-y-2">
+                    <div class="flex items-center">
+                        <div class="w-5 h-5 rounded-sm bg-yellow-400 border border-gray-400 mr-3"></div>
+                        <span class="text-sm">Yellow Warning (Fill)</span>
+                    </div>
+                     <div class="flex items-center">
+                        <div class="w-5 h-5 rounded-sm bg-orange-500 border border-gray-400 mr-3"></div>
+                        <span class="text-sm">Orange Warning (Fill)</span>
+                    </div>
+                     <div class="flex items-center">
+                        <div class="w-5 h-5 rounded-sm bg-red-600 border border-gray-400 mr-3"></div>
+                        <span class="text-sm">Red Warning (Fill)</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-5 h-5 rounded-sm mr-3" style="background: repeating-linear-gradient(45deg, #9ca3af, #9ca3af 5px, rgba(255,255,255,0.2) 5px, rgba(255,255,255,0.2) 10px);"></div>
+                        <span class="text-sm">Local Effects (Hatching)</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -69,6 +112,10 @@
             // --- UI Elements ---
             const statusOverlay = document.getElementById('status-overlay');
             const statusContent = document.getElementById('status-content');
+            const sustainedWindInput = document.getElementById('sustained-wind-input');
+            const gustWindInput = document.getElementById('gust-wind-input');
+            const updateMapBtn = document.getElementById('update-map-btn');
+            const clearMapBtn = document.getElementById('clear-map-btn');
             
             const loadingSpinnerHTML = `
                 <svg class="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -82,110 +129,163 @@
             const map = L.map('map').setView([55, -70], 4);
             const regionsLayerGroup = L.layerGroup().addTo(map);
 
-            // --- Tile Layer ---
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             }).addTo(map);
 
-            // --- GML File URL ---
-            // This script will fetch the GML file from the same directory as this HTML file.
-            // Make sure 'land_standard_exaggerated_atlantic.gml' is in your GitHub repo with this file.
+            // --- Warning Tier Definitions ---
+            const WARNING_TIERS = {
+                RED: { threshold: 120, color: '#dc2626', hatchColor: '#b91c1c' },
+                ORANGE: { threshold: 90, color: '#f97316', hatchColor: '#ea580c' },
+                YELLOW: { threshold: 70, color: '#facc15', hatchColor: '#eab308' },
+                NONE: { color: 'transparent', hatchColor: '#3b82f6' }
+            };
+
+            // --- Data Simulation ---
+            const regionProperties = {
+                "land_standard_coarse.4": { maxSustained: 100, maxGust: 130, localEffects: true, localHatchThresholds: { YELLOW: 80, ORANGE: 110, RED: 140 } },
+                "land_standard_coarse.5": { maxSustained: 95, maxGust: 110, localEffects: false },
+                "land_standard_coarse.6": { maxSustained: 110, maxGust: 125, localEffects: true, localHatchThresholds: { YELLOW: 90, ORANGE: 115, RED: 135 } },
+                "land_standard_coarse.9": { maxSustained: 120, maxGust: 140, localEffects: true, localHatchThresholds: { YELLOW: 100, ORANGE: 130, RED: 150 } },
+                "land_standard_coarse.10": { maxSustained: 125, maxGust: 145, localEffects: true, localHatchThresholds: { YELLOW: 110, ORANGE: 135, RED: 155 } },
+                "land_standard_coarse.26": { maxSustained: 90, maxGust: 115, localEffects: true, localHatchThresholds: { YELLOW: 75, ORANGE: 100, RED: 125 } },
+                "land_standard_coarse.54": { maxSustained: 130, maxGust: 150, localEffects: true, localHatchThresholds: { YELLOW: 100, ORANGE: 120, RED: 140 } },
+                "land_standard_coarse.60": { maxSustained: 80, maxGust: 95, localEffects: false },
+                "land_standard_coarse.132": { maxSustained: 115, maxGust: 135, localEffects: true, localHatchThresholds: { YELLOW: 95, ORANGE: 125, RED: 145 } },
+                "land_standard_coarse.118": { maxSustained: 85, maxGust: 105, localEffects: true, localHatchThresholds: { YELLOW: 70, ORANGE: 95, RED: 115 } },
+            };
+            
+            let polygonLayers = {};
+
+            // --- Create Hatching Patterns ---
+            const patterns = {};
+            ['YELLOW', 'ORANGE', 'RED'].forEach(tier => {
+                patterns[tier] = new L.Pattern({ angle: 45, weight: 2, color: WARNING_TIERS[tier].hatchColor, spaceWeight: 6, spaceColor: 'transparent' });
+                patterns[tier].addTo(map);
+            });
+            
             const gmlFileUrl = 'land_standard_exaggerated_atlantic.gml';
 
-            // --- Main Function to Load and Display GML ---
             async function loadAndDisplayGML() {
-                // Show loader
                 statusContent.innerHTML = loadingSpinnerHTML;
                 statusOverlay.style.display = 'flex';
-
                 try {
                     const response = await fetch(gmlFileUrl);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! Status: ${response.status}`);
-                    }
+                    if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
                     const gmlString = await response.text();
                     processGML(gmlString);
+                    resetMapStyles(); // Set initial transparent state
                 } catch (error) {
                     console.error('Error fetching or processing GML file:', error);
-                    statusContent.innerHTML = `
-                        <p class="text-red-500 font-semibold">Failed to load map data.</p>
-                        <p class="text-sm text-gray-600 mt-2">Could not fetch file from: <br><code>${gmlFileUrl}</code></p>
-                        <p class="text-sm text-gray-500 mt-2">Please ensure the file is in the same directory as this HTML file on your GitHub repository.</p>
-                    `;
+                    statusContent.innerHTML = `<p class="text-red-500 font-semibold">Failed to load map data.</p>`;
                 }
             }
 
-            // --- Function to Process GML Data ---
             function processGML(gmlString) {
-                regionsLayerGroup.clearLayers();
-
                 const parser = new DOMParser();
                 const gmlDoc = parser.parseFromString(gmlString, "application/xml");
-                
-                const parseError = gmlDoc.querySelector("parsererror");
-                if (parseError) {
-                    console.error("Error parsing GML:", parseError.textContent);
-                    statusContent.innerHTML = `<p class="text-red-500 font-semibold">Error: Could not parse the GML file. Please check the file format and content.</p>`;
-                    statusOverlay.style.display = 'flex';
-                    return;
-                }
+                if (gmlDoc.querySelector("parsererror")) throw new Error('Could not parse GML file.');
                 
                 const featureMembers = gmlDoc.querySelectorAll("gml\\:featureMember, featureMember");
-
-                if (featureMembers.length === 0) {
-                    console.error("No GML feature members found.");
-                    statusContent.innerHTML = `<p class="text-red-500 font-semibold">Error: No features found in the GML file.</p>`;
-                    statusOverlay.style.display = 'flex';
-                    return;
-                }
-
+                if (featureMembers.length === 0) throw new Error('No features found in GML file.');
+                
                 const allLatLngs = [];
-
                 featureMembers.forEach(member => {
-                    const nameTag = member.querySelector("ogr\\:NAME, NAME");
-                    const name = nameTag ? nameTag.textContent : 'Unnamed Region';
-
+                    const fid = member.firstElementChild.getAttribute('fid');
+                    const name = member.querySelector("ogr\\:NAME, NAME")?.textContent || 'Unnamed Region';
                     const geometries = member.querySelectorAll("gml\\:Polygon, Polygon, gml\\:MultiPolygon, MultiPolygon");
 
                     geometries.forEach(geom => {
-                        const coordTags = geom.querySelectorAll("gml\\:coordinates, coordinates");
-                        coordTags.forEach(coordTag => {
+                        geom.querySelectorAll("gml\\:coordinates, coordinates").forEach(coordTag => {
                             const coordsStr = coordTag.textContent.trim();
                             if (coordsStr) {
-                                const latLngs = coordsStr.split(/\s+/)
-                                    .filter(p => p)
-                                    .map(pair => {
-                                        const [lon, lat] = pair.split(',').map(parseFloat);
-                                        if (!isNaN(lat) && !isNaN(lon)) {
-                                            allLatLngs.push([lat, lon]);
-                                            return [lat, lon];
-                                        }
-                                        return null;
-                                    }).filter(p => p !== null);
+                                const latLngs = coordsStr.split(/\s+/).filter(p => p).map(pair => {
+                                    const [lon, lat] = pair.split(',').map(parseFloat);
+                                    if (!isNaN(lat) && !isNaN(lon)) {
+                                        allLatLngs.push([lat, lon]);
+                                        return [lat, lon];
+                                    }
+                                    return null;
+                                }).filter(p => p);
 
                                 if (latLngs.length > 2) {
-                                    const polygonLayer = L.polygon(latLngs, {
-                                        color: '#0284c7',
-                                        weight: 2,
-                                        fillColor: '#38bdf8',
-                                        fillOpacity: 0.4
-                                    }).bindPopup(name);
+                                    const polygonLayer = L.polygon(latLngs);
+                                    let popupContent = `<b>${name}</b>`;
+                                    if (regionProperties[fid]) {
+                                        popupContent += `<br>Max Sustained: ${regionProperties[fid].maxSustained} km/h<br>Max Gust: ${regionProperties[fid].maxGust} km/h<br>${regionProperties[fid].localEffects ? 'Prone to local effects' : ''}`;
+                                    }
+                                    polygonLayer.bindPopup(popupContent);
                                     regionsLayerGroup.addLayer(polygonLayer);
+                                    polygonLayers[fid] = polygonLayer;
                                 }
                             }
                         });
                     });
                 });
                 
-                if (allLatLngs.length > 0) {
-                    map.fitBounds(L.latLngBounds(allLatLngs), { padding: [50, 50] });
-                }
-
+                if (allLatLngs.length > 0) map.fitBounds(L.latLngBounds(allLatLngs), { padding: [50, 50] });
                 statusOverlay.style.display = 'none';
             }
             
-            // --- Load the data when the page loads ---
+            function getWarningTier(windSpeed, maxWind, type = 'sustained') {
+                const tiers = ['RED', 'ORANGE', 'YELLOW'];
+                if (windSpeed > maxWind) return 'NONE';
+                for (const tier of tiers) {
+                    if (windSpeed >= WARNING_TIERS[tier].threshold) return tier;
+                }
+                return 'NONE';
+            }
+
+             function getLocalEffectTier(gustSpeed, thresholds) {
+                if (!thresholds) return 'NONE';
+                if (gustSpeed >= thresholds.RED) return 'RED';
+                if (gustSpeed >= thresholds.ORANGE) return 'ORANGE';
+                if (gustSpeed >= thresholds.YELLOW) return 'YELLOW';
+                return 'NONE';
+            }
+
+            function updateMapStyles() {
+                const sustainedSpeed = parseFloat(sustainedWindInput.value) || 0;
+                const gustSpeed = parseFloat(gustWindInput.value) || 0;
+
+                for (const fid in polygonLayers) {
+                    const layer = polygonLayers[fid];
+                    const props = regionProperties[fid] || { maxSustained: 70, maxGust: 90, localEffects: false };
+                    
+                    const sustainedTier = getWarningTier(sustainedSpeed, props.maxSustained);
+                    const hatchTier = props.localEffects ? getLocalEffectTier(gustSpeed, props.localHatchThresholds) : 'NONE';
+                    
+                    const fillTier = sustainedTier;
+                    
+                    const styleOptions = {
+                        color: WARNING_TIERS[sustainedTier !== 'NONE' ? sustainedTier : hatchTier].hatchColor || '#3b82f6',
+                        weight: 2,
+                        fillColor: WARNING_TIERS[fillTier].color,
+                        fillOpacity: (fillTier === 'NONE' && hatchTier === 'NONE') ? 0 : 0.6,
+                        fillPattern: hatchTier !== 'NONE' ? patterns[hatchTier] : null
+                    };
+
+                    layer.setStyle(styleOptions);
+                }
+            }
+
+            function resetMapStyles() {
+                sustainedWindInput.value = '';
+                gustWindInput.value = '';
+                for (const fid in polygonLayers) {
+                    polygonLayers[fid].setStyle({
+                        color: '#3b82f6',
+                        weight: 1,
+                        fillOpacity: 0,
+                        fillPattern: null
+                    });
+                }
+            }
+            
+            updateMapBtn.addEventListener('click', updateMapStyles);
+            clearMapBtn.addEventListener('click', resetMapStyles);
+
             loadAndDisplayGML();
         });
     </script>
