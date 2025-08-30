@@ -108,7 +108,7 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', async function () {
             // --- UI Elements ---
             const statusOverlay = document.getElementById('status-overlay');
             const statusContent = document.getElementById('status-content');
@@ -142,20 +142,111 @@
                 NONE: { color: 'transparent', hatchColor: '#3b82f6' }
             };
 
-            // --- Data Simulation ---
-            const regionProperties = {
-                "land_standard_coarse.4": { maxSustained: 100, maxGust: 130, localEffects: true, localHatchThresholds: { YELLOW: 80, ORANGE: 110, RED: 140 } },
-                "land_standard_coarse.5": { maxSustained: 95, maxGust: 110, localEffects: false },
-                "land_standard_coarse.6": { maxSustained: 110, maxGust: 125, localEffects: true, localHatchThresholds: { YELLOW: 90, ORANGE: 115, RED: 135 } },
-                "land_standard_coarse.9": { maxSustained: 120, maxGust: 140, localEffects: true, localHatchThresholds: { YELLOW: 100, ORANGE: 130, RED: 150 } },
-                "land_standard_coarse.10": { maxSustained: 125, maxGust: 145, localEffects: true, localHatchThresholds: { YELLOW: 110, ORANGE: 135, RED: 155 } },
-                "land_standard_coarse.26": { maxSustained: 90, maxGust: 115, localEffects: true, localHatchThresholds: { YELLOW: 75, ORANGE: 100, RED: 125 } },
-                "land_standard_coarse.54": { maxSustained: 130, maxGust: 150, localEffects: true, localHatchThresholds: { YELLOW: 100, ORANGE: 120, RED: 140 } },
-                "land_standard_coarse.60": { maxSustained: 80, maxGust: 95, localEffects: false },
-                "land_standard_coarse.132": { maxSustained: 115, maxGust: 135, localEffects: true, localHatchThresholds: { YELLOW: 95, ORANGE: 125, RED: 145 } },
-                "land_standard_coarse.118": { maxSustained: 85, maxGust: 105, localEffects: true, localHatchThresholds: { YELLOW: 70, ORANGE: 95, RED: 115 } },
+            // --- Define categories and their properties here ---
+            const CATEGORY_DEFS = {
+                Offshore: {
+                    maxSustained: 90,
+                    maxGust: 110,
+                    localEffects: false
+                },
+                Coastal: {
+                    maxSustained: 80,
+                    maxGust: 100,
+                    localEffects: true,
+                    localHatchThresholds: { YELLOW: 70, ORANGE: 90, RED: 110 }
+                },
+                Inland: {
+                    maxSustained: 60,
+                    maxGust: 80,
+                    localEffects: false
+                }
             };
             
+            const regionProperties = {
+                "land_standard_coarse.4": { category: 'Coastal' }, // Kings County
+                "land_standard_coarse.5": { category: 'Coastal' }, // Annapolis County
+                "land_standard_coarse.6": { category: 'Coastal' }, // Digby County
+                "land_standard_coarse.7": { category: 'Coastal' }, // Lunenburg County
+                "land_standard_coarse.8": { category: 'Coastal' }, // Queens County
+                "land_standard_coarse.9": { category: 'Coastal' }, // Shelburne County
+                "land_standard_coarse.10": { category: 'Offshore' }, // Yarmouth County
+                "land_standard_coarse.11": { category: 'Inland' }, // Cumberland County - Minas Shore
+                "land_standard_coarse.12": { category: 'Inland' }, // Cumberland County North and Cobequid Pass
+                "land_standard_coarse.13": { category: 'Inland' }, // Colchester County - Cobequid Bay
+                "land_standard_coarse.14": { category: 'Inland' }, // Colchester County North
+                "land_standard_coarse.15": { category: 'Inland' }, // Hants County
+                "land_standard_coarse.16": { category: 'Inland' }, // Colchester County - Truro and south
+                "land_standard_coarse.17": { category: 'Inland' }, // Halifax Metro and Halifax County West
+                "land_standard_coarse.18": { category: 'Coastal' }, // Halifax County - east of Porters Lake
+                "land_standard_coarse.19": { category: 'Offshore' }, // Pictou County
+                "land_standard_coarse.20": { category: 'Coastal' }, // Guysborough County
+                "land_standard_coarse.21": { category: 'Coastal' }, // Antigonish County
+                "land_standard_coarse.22": { category: 'Inland' }, // Richmond County
+                "land_standard_coarse.23": { category: 'Coastal' }, // Inverness County - south of Mabou
+                "land_standard_coarse.24": { category: 'Coastal' }, // Inverness County - Mabou and north
+                "land_standard_coarse.25": { category: 'Coastal' }, // Victoria County
+                "land_standard_coarse.26": { category: 'Offshore' }, // Sydney Metro and Cape Breton County
+                "land_standard_coarse.27": { category: 'Coastal' }, // Fredericton and Southern York County
+                "land_standard_coarse.28": { category: 'Inland' }, // Oromocto and Sunbury County
+                "land_standard_coarse.29": { category: 'Inland' }, // Grand Lake and Queens County
+                "land_standard_coarse.30": { category: 'Inland' }, // Sussex/Kennebecasis Valley and Kings County
+                "land_standard_coarse.31": { category: 'Coastal' }, // Saint John and County
+                "land_standard_coarse.32": { category: 'Coastal' }, // St. Stephen and Northern Charlotte County
+                "land_standard_coarse.33": { category: 'Inland' }, // Grand Manan and Coastal Charlotte County
+                "land_standard_coarse.34": { category: 'Inland' }, // Woodstock and Carleton County
+                "land_standard_coarse.35": { category: 'Inland' }, // Stanley - Doaktown - Blackville Area
+                "land_standard_coarse.36": { category: 'Inland' }, // Kent County
+                "land_standard_coarse.37": { category: 'Coastal' }, // Moncton and Southeast New Brunswick
+                "land_standard_coarse.38": { category: 'Inland' }, // Kouchibouguac National Park
+                "land_standard_coarse.39": { category: 'Inland' }, // Fundy National Park
+                "land_standard_coarse.40": { category: 'Inland' }, // Edmundston and Madawaska County
+                "land_standard_coarse.41": { category: 'Inland' }, // Restigouche County
+                "land_standard_coarse.42": { category: 'Inland' }, // Grand Falls and Victoria County
+                "land_standard_coarse.43": { category: 'Inland' }, // Mount Carleton - Renous Highway
+                "land_standard_coarse.44": { category: 'Inland' }, // Bathurst and Chaleur Region
+                "land_standard_coarse.45": { category: 'Inland' }, // Miramichi and area
+                "land_standard_coarse.46": { category: 'Inland' }, // Acadian Peninsula
+                "land_standard_coarse.47": { category: 'Inland' }, // Kings County P.E.I.
+                "land_standard_coarse.48": { category: 'Inland' }, // Queens County P.E.I.
+                "land_standard_coarse.49": { category: 'Inland' }, // Prince County P.E.I.
+                "land_standard_coarse.50": { category: 'Inland  '}, // Avalon Peninsula North
+                "land_standard_coarse.51": { category: 'Inland' }, // Avalon Peninsula Southeast
+                "land_standard_coarse.52": { category: 'Inland' }, // St. John's and vicinity
+                "land_standard_coarse.53": { category: 'Inland' }, // Avalon Peninsula Southwest
+                "land_standard_coarse.54": { category: 'Coastal' }, // Burin Peninsula
+                "land_standard_coarse.55": { category: 'Coastal' }, // Connaigre
+                "land_standard_coarse.56": { category: 'Coastal' }, // Burgeo - Ramea
+                "land_standard_coarse.57": { category: 'Coastal' }, // Channel-Port aux Basques and vicinity
+                "land_standard_coarse.58": { category: 'Inland' }, // Corner Brook and vicinity
+                "land_standard_coarse.59": { category: 'Inland' }, // Deer Lake - Humber Valley
+                "land_standard_coarse.60": { category: 'Offshore' }, // Gros Morne
+                "land_standard_coarse.61": { category: 'Inland' }, // Bay St. Geroge
+                "land_standard_coarse.62": { category: 'Inland' }, // Buchans and the interior
+                "land_standard_coarse.63": { category: 'Inland' }, // Grand Falls-Windsor and vicinity
+                "land_standard_coarse.64": { category: 'Inland' }, // Bay of Exploits
+                "land_standard_coarse.65": { category: 'Coastal' },  // Bonavista North
+                "land_standard_coarse.66": { category: 'Coastal' },  // Bonavista Peninsula
+                "land_standard_coarse.67": { category: 'Coastal' },  // Clarenville and vicinity
+                "land_standard_coarse.68": { category: 'Coastal' },  // Gander and vicinity
+                "land_standard_coarse.69": { category: 'Coastal' },  // Green Bay - White Bay
+                "land_standard_coarse.70": { category: 'Coastal' },  // Terra Nova
+                "land_standard_coarse.71": { category: 'Coastal' },  // Northern Peninsula East
+                "land_standard_coarse.72": { category: 'Coastal' },  // Parson's Pond - Hawke's Bay
+                "land_standard_coarse.73": { category: 'Coastal' },  // Port Saunders and the Straits
+                "land_standard_coarse.74": { category: 'Coastal' },  // Red Bay to L'Anse-au-Clair
+                "land_standard_coarse.75": { category: 'Coastal' },  // Norman Bay to Lodge Bay
+                "land_standard_coarse.76": { category: 'Coastal' },  // Cartwright to Black Tickle
+                "land_standard_coarse.77": { category: 'Coastal' },  // Rigolet and vicinity
+                "land_standard_coarse.78": { category: 'Coastal' },  // Postville - Makkovik
+                "land_standard_coarse.79": { category: 'Coastal' },  // Hopedale and vicnity
+                "land_standard_coarse.80": { category: 'Coastal' },  // Nain and vicinity
+                "land_standard_coarse.81": { category: 'Inland' },  // Upper Lake Melville
+                "land_standard_coarse.82": { category: 'Inland' },  // Eagle River
+                "land_standard_coarse.83": { category: 'Inland' },  // Churchill Valley
+                "land_standard_coarse.84": { category: 'Inland' },  // Churchill Falls and vicinity
+                "land_standard_coarse.85": { category: 'Inland' },  // Labrador City and Wabush
+            };
+                            
             let polygonLayers = {};
 
             // --- Create Hatching Patterns ---
@@ -193,7 +284,14 @@
                 const allLatLngs = [];
                 featureMembers.forEach(member => {
                     const fid = member.firstElementChild.getAttribute('fid');
-                    const name = member.querySelector("ogr\\:NAME, NAME")?.textContent || 'Unnamed Region';
+                    const name = member.querySelector("ogr\\:NAME, NAME")?.textContent || fid;
+                    
+                    const regionCat = regionProperties[fid]?.category || 'Inland'; // Default to Inland if no category is defined
+                    const props = {
+                        name: name,
+                        ...CATEGORY_DEFS[regionCat] // Merge category properties
+                    };
+                    
                     const geometries = member.querySelectorAll("gml\\:Polygon, Polygon, gml\\:MultiPolygon, MultiPolygon");
 
                     geometries.forEach(geom => {
@@ -210,11 +308,14 @@
                                 }).filter(p => p);
 
                                 if (latLngs.length > 2) {
-                                    const polygonLayer = L.polygon(latLngs);
-                                    let popupContent = `<b>${name}</b>`;
-                                    if (regionProperties[fid]) {
-                                        popupContent += `<br>Max Sustained: ${regionProperties[fid].maxSustained} km/h<br>Max Gust: ${regionProperties[fid].maxGust} km/h<br>${regionProperties[fid].localEffects ? 'Prone to local effects' : ''}`;
-                                    }
+                                    const polygonLayer = L.polygon(latLngs, {
+                                        color: 'black',
+                                        weight: 1,
+                                        fillOpacity: 0,
+                                        fillColor: 'transparent'
+                                    });
+                                    let popupContent = `<b>${props.name}</b><br>Category: ${regionCat}`;
+                                    popupContent += `<br>Max Sustained: ${props.maxSustained} km/h<br>Max Gust: ${props.maxGust} km/h<br>${props.localEffects ? 'Prone to local effects' : ''}`;
                                     polygonLayer.bindPopup(popupContent);
                                     regionsLayerGroup.addLayer(polygonLayer);
                                     polygonLayers[fid] = polygonLayer;
@@ -228,7 +329,7 @@
                 statusOverlay.style.display = 'none';
             }
             
-            function getWarningTier(windSpeed, maxWind, type = 'sustained') {
+            function getWarningTier(windSpeed, maxWind) {
                 const tiers = ['RED', 'ORANGE', 'YELLOW'];
                 if (windSpeed > maxWind) return 'NONE';
                 for (const tier of tiers) {
@@ -251,19 +352,24 @@
 
                 for (const fid in polygonLayers) {
                     const layer = polygonLayers[fid];
-                    const props = regionProperties[fid] || { maxSustained: 70, maxGust: 90, localEffects: false };
-                    
+                    const regionCat = regionProperties[fid]?.category || 'Inland';
+                    const props = CATEGORY_DEFS[regionCat];
+
+                    // Determine sustained tier
                     const sustainedTier = getWarningTier(sustainedSpeed, props.maxSustained);
-                    const hatchTier = props.localEffects ? getLocalEffectTier(gustSpeed, props.localHatchThresholds) : 'NONE';
-                    
-                    const fillTier = sustainedTier;
-                    
+
+                    // Determine gust tier
+                    const gustTier = getWarningTier(gustSpeed, props.maxGust);
+
+                    // Use the higher tier between sustained and gust
+                    const fillTier = sustainedTier === 'NONE' ? gustTier : (gustTier === 'NONE' ? sustainedTier : (WARNING_TIERS[sustainedTier].threshold > WARNING_TIERS[gustTier].threshold ? sustainedTier : gustTier));
+
                     const styleOptions = {
-                        color: WARNING_TIERS[sustainedTier !== 'NONE' ? sustainedTier : hatchTier].hatchColor || '#3b82f6',
+                        color: 'black',
                         weight: 2,
                         fillColor: WARNING_TIERS[fillTier].color,
-                        fillOpacity: (fillTier === 'NONE' && hatchTier === 'NONE') ? 0 : 0.6,
-                        fillPattern: hatchTier !== 'NONE' ? patterns[hatchTier] : null
+                        fillOpacity: fillTier === 'NONE' ? 0 : 0.6,
+                        fillPattern: null
                     };
 
                     layer.setStyle(styleOptions);
@@ -275,10 +381,11 @@
                 gustWindInput.value = '';
                 for (const fid in polygonLayers) {
                     polygonLayers[fid].setStyle({
-                        color: '#3b82f6',
+                        color: 'black',
                         weight: 1,
                         fillOpacity: 0,
-                        fillPattern: null
+                        fillPattern: null,
+                        fillColor: 'transparent'
                     });
                 }
             }
@@ -291,4 +398,3 @@
     </script>
 </body>
 </html>
-

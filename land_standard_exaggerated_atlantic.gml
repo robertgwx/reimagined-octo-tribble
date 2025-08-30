@@ -612,8 +612,8 @@
       <ogr:POLY_ID>650039</ogr:POLY_ID>
       <ogr:PRIME_ID>550037</ogr:PRIME_ID>
       <ogr:CLC_V5>016400</ogr:CLC_V5>
-      <ogr:NAME>Southeast New Brunswick</ogr:NAME>
-      <ogr:NOM>sud-est du Nouveau-Brunswick</ogr:NOM>
+      <ogr:NAME>Moncton and Southeast New Brunswick</ogr:NAME>
+      <ogr:NOM>Moncton et sud-est du Nouveau-Brunswick</ogr:NOM>
       <ogr:PERIM_KM>473.7877</ogr:PERIM_KM>
       <ogr:AREA_KM2>5500.5553</ogr:AREA_KM2>
       <ogr:LAT_DD>46.004033239999998</ogr:LAT_DD>
