@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlantic Forecast Regions</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- LeafletJS for the interactive map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <style>
+        /* Set a specific height for the map container */
+        #map { 
+            height: 100vh; 
+            width: 100vw;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        /* Custom Leaflet popup styles */
+        .leaflet-popup-content-wrapper {
+            background-color: #ffffff;
+            color: #333;
+            border-radius: 8px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+        }
+        .leaflet-popup-content {
+            margin: 14px 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .leaflet-popup-tip-container {
+            width: 40px;
+            height: 20px;
+        }
+        .leaflet-popup-tip {
+             background: #ffffff;
+             border: none;
+             box-shadow: none;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <!-- Main Map Container -->
+    <div id="map" class="relative z-0"></div>
+
+    <!-- Header Overlay -->
+    <div class="absolute top-0 left-0 right-0 p-4 z-10 pointer-events-none">
+        <div class="max-w-md mx-auto bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 text-center">
+            <h1 class="text-2xl font-bold text-gray-800">Atlantic Forecast Regions</h1>
+            <p class="text-sm text-gray-600 mt-1">Visualizing GML data from GitHub Pages</p>
+        </div>
+    </div>
+    
+    <!-- Status Overlay -->
+    <div id="status-overlay" class="absolute inset-0 bg-white/50 backdrop-blur-sm flex justify-center items-center z-20">
+        <div id="status-content" class="flex flex-col items-center text-center p-4">
+            <!-- Status content will be inserted by JS -->
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // --- UI Elements ---
+            const statusOverlay = document.getElementById('status-overlay');
+            const statusContent = document.getElementById('status-content');
+            
+            const loadingSpinnerHTML = `
+                <svg class="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-4 text-gray-700 font-semibold">Loading and parsing GML data...</p>
+            `;
+            
+            // --- Map Initialization ---
+            const map = L.map('map').setView([55, -70], 4);
+            const regionsLayerGroup = L.layerGroup().addTo(map);
+
+            // --- Tile Layer ---
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
+
+            // --- GML File URL ---
+            // This script will fetch the GML file from the same directory as this HTML file.
+            // Make sure 'land_standard_exaggerated_atlantic.gml' is in your GitHub repo with this file.
+            const gmlFileUrl = 'land_standard_exaggerated_atlantic.gml';
+
+            // --- Main Function to Load and Display GML ---
+            async function loadAndDisplayGML() {
+                // Show loader
+                statusContent.innerHTML = loadingSpinnerHTML;
+                statusOverlay.style.display = 'flex';
+
+                try {
+                    const response = await fetch(gmlFileUrl);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    const gmlString = await response.text();
+                    processGML(gmlString);
+                } catch (error) {
+                    console.error('Error fetching or processing GML file:', error);
+                    statusContent.innerHTML = `
+                        <p class="text-red-500 font-semibold">Failed to load map data.</p>
+                        <p class="text-sm text-gray-600 mt-2">Could not fetch file from: <br><code>${gmlFileUrl}</code></p>
+                        <p class="text-sm text-gray-500 mt-2">Please ensure the file is in the same directory as this HTML file on your GitHub repository.</p>
+                    `;
+                }
+            }
+
+            // --- Function to Process GML Data ---
+            function processGML(gmlString) {
+                regionsLayerGroup.clearLayers();
+
+                const parser = new DOMParser();
+                const gmlDoc = parser.parseFromString(gmlString, "application/xml");
+                
+                const parseError = gmlDoc.querySelector("parsererror");
+                if (parseError) {
+                    console.error("Error parsing GML:", parseError.textContent);
+                    statusContent.innerHTML = `<p class="text-red-500 font-semibold">Error: Could not parse the GML file. Please check the file format and content.</p>`;
+                    statusOverlay.style.display = 'flex';
+                    return;
+                }
+                
+                const featureMembers = gmlDoc.querySelectorAll("gml\\:featureMember, featureMember");
+
+                if (featureMembers.length === 0) {
+                    console.error("No GML feature members found.");
+                    statusContent.innerHTML = `<p class="text-red-500 font-semibold">Error: No features found in the GML file.</p>`;
+                    statusOverlay.style.display = 'flex';
+                    return;
+                }
+
+                const allLatLngs = [];
+
+                featureMembers.forEach(member => {
+                    const nameTag = member.querySelector("ogr\\:NAME, NAME");
+                    const name = nameTag ? nameTag.textContent : 'Unnamed Region';
+
+                    const geometries = member.querySelectorAll("gml\\:Polygon, Polygon, gml\\:MultiPolygon, MultiPolygon");
+
+                    geometries.forEach(geom => {
+                        const coordTags = geom.querySelectorAll("gml\\:coordinates, coordinates");
+                        coordTags.forEach(coordTag => {
+                            const coordsStr = coordTag.textContent.trim();
+                            if (coordsStr) {
+                                const latLngs = coordsStr.split(/\s+/)
+                                    .filter(p => p)
+                                    .map(pair => {
+                                        const [lon, lat] = pair.split(',').map(parseFloat);
+                                        if (!isNaN(lat) && !isNaN(lon)) {
+                                            allLatLngs.push([lat, lon]);
+                                            return [lat, lon];
+                                        }
+                                        return null;
+                                    }).filter(p => p !== null);
+
+                                if (latLngs.length > 2) {
+                                    const polygonLayer = L.polygon(latLngs, {
+                                        color: '#0284c7',
+                                        weight: 2,
+                                        fillColor: '#38bdf8',
+                                        fillOpacity: 0.4
+                                    }).bindPopup(name);
+                                    regionsLayerGroup.addLayer(polygonLayer);
+                                }
+                            }
+                        });
+                    });
+                });
+                
+                if (allLatLngs.length > 0) {
+                    map.fitBounds(L.latLngBounds(allLatLngs), { padding: [50, 50] });
+                }
+
+                statusOverlay.style.display = 'none';
+            }
+            
+            // --- Load the data when the page loads ---
+            loadAndDisplayGML();
+        });
+    </script>
+</body>
+</html>
+
