@@ -97,6 +97,13 @@
                     </div>
                 </div>
             </div>
+            <!-- Debug Info -->
+            <div class="mt-4">
+                <h3 class="text-sm font-medium text-gray-700">Debug Info</h3>
+                <div id="debug-info" class="text-xs text-gray-600 mt-1">
+                    <!-- Debug information will be displayed here -->
+                </div>
+            </div>
         </div>
     </div>
     
@@ -116,6 +123,7 @@
             const gustWindInput = document.getElementById('gust-wind-input');
             const updateMapBtn = document.getElementById('update-map-btn');
             const clearMapBtn = document.getElementById('clear-map-btn');
+            const debugInfo = document.getElementById('debug-info');
             
             const loadingSpinnerHTML = `
                 <svg class="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -209,7 +217,7 @@
                 "land_standard_coarse.47": { category: 'Inland' }, // Kings County P.E.I.
                 "land_standard_coarse.48": { category: 'Inland' }, // Queens County P.E.I.
                 "land_standard_coarse.49": { category: 'Inland' }, // Prince County P.E.I.
-                "land_standard_coarse.50": { category: 'Inland  '}, // Avalon Peninsula North
+                "land_standard_coarse.50": { category: 'Inland' }, // Avalon Peninsula North (FIXED: removed extra spaces)
                 "land_standard_coarse.51": { category: 'Inland' }, // Avalon Peninsula Southeast
                 "land_standard_coarse.52": { category: 'Inland' }, // St. John's and vicinity
                 "land_standard_coarse.53": { category: 'Inland' }, // Avalon Peninsula Southwest
@@ -238,7 +246,7 @@
                 "land_standard_coarse.76": { category: 'Coastal' },  // Cartwright to Black Tickle
                 "land_standard_coarse.77": { category: 'Coastal' },  // Rigolet and vicinity
                 "land_standard_coarse.78": { category: 'Coastal' },  // Postville - Makkovik
-                "land_standard_coarse.79": { category: 'Coastal' },  // Hopedale and vicnity
+                "land_standard_coarse.79": { category: 'Coastal' },  // Hopedale and vicinity
                 "land_standard_coarse.80": { category: 'Coastal' },  // Nain and vicinity
                 "land_standard_coarse.81": { category: 'Inland' },  // Upper Lake Melville
                 "land_standard_coarse.82": { category: 'Inland' },  // Eagle River
@@ -269,7 +277,8 @@
                     resetMapStyles(); // Set initial transparent state
                 } catch (error) {
                     console.error('Error fetching or processing GML file:', error);
-                    statusContent.innerHTML = `<p class="text-red-500 font-semibold">Failed to load map data.</p>`;
+                    statusContent.innerHTML = `<p class="text-red-500 font-semibold">Failed to load map data. ${error.message}</p>`;
+                    setTimeout(() => statusOverlay.style.display = 'none', 3000);
                 }
             }
 
@@ -282,112 +291,225 @@
                 if (featureMembers.length === 0) throw new Error('No features found in GML file.');
                 
                 const allLatLngs = [];
+                let processedCount = 0;
+
                 featureMembers.forEach(member => {
                     const fid = member.firstElementChild.getAttribute('fid');
                     const name = member.querySelector("ogr\\:NAME, NAME")?.textContent || fid;
                     
-                    const regionCat = regionProperties[fid]?.category || 'Inland'; // Default to Inland if no category is defined
+                    // Consistent category matching
+                    let regionCat = 'Inland'; // Default
+                    if (regionProperties[fid]) {
+                        regionCat = String(regionProperties[fid].category).trim();
+                    }
+
                     const props = {
                         name: name,
-                        ...CATEGORY_DEFS[regionCat] // Merge category properties
+                        category: regionCat,
+                        ...CATEGORY_DEFS[regionCat]
                     };
                     
-                    const geometries = member.querySelectorAll("gml\\:Polygon, Polygon, gml\\:MultiPolygon, MultiPolygon");
+                    // More robust coordinate extraction
+                    const extractPolygonCoordinates = (element) => {
+                        const coordTags = element.querySelectorAll("gml\\:coordinates, coordinates");
+                        const polygons = [];
 
-                    geometries.forEach(geom => {
-                        geom.querySelectorAll("gml\\:coordinates, coordinates").forEach(coordTag => {
+                        coordTags.forEach(coordTag => {
                             const coordsStr = coordTag.textContent.trim();
-                            if (coordsStr) {
-                                const latLngs = coordsStr.split(/\s+/).filter(p => p).map(pair => {
-                                    const [lon, lat] = pair.split(',').map(parseFloat);
-                                    if (!isNaN(lat) && !isNaN(lon)) {
-                                        allLatLngs.push([lat, lon]);
-                                        return [lat, lon];
-                                    }
-                                    return null;
-                                }).filter(p => p);
+                            if (!coordsStr) return;
 
-                                if (latLngs.length > 2) {
-                                    const polygonLayer = L.polygon(latLngs, {
-                                        color: 'black',
-                                        weight: 1,
-                                        fillOpacity: 0,
-                                        fillColor: 'transparent'
-                                    });
-                                    let popupContent = `<b>${props.name}</b><br>Category: ${regionCat}`;
-                                    popupContent += `<br>Max Sustained: ${props.maxSustained} km/h<br>Max Gust: ${props.maxGust} km/h<br>${props.localEffects ? 'Prone to local effects' : ''}`;
-                                    polygonLayer.bindPopup(popupContent);
-                                    regionsLayerGroup.addLayer(polygonLayer);
-                                    polygonLayers[fid] = polygonLayer;
+                            // Consistent coordinate parsing
+                            const coords = coordsStr.split(/\s+/)
+                                .filter(coord => coord.includes(','))
+                                .map(coord => {
+                                    const [lon, lat] = coord.split(',').map(num => parseFloat(num.trim()));
+                                    return !isNaN(lat) && !isNaN(lon) ? [lat, lon] : null;
+                                })
+                                .filter(coord => coord !== null);
+
+                            // Strict polygon validation
+                            if (coords.length > 3) {
+                                // Ensure polygon is closed with minimal deviation
+                                const first = coords[0];
+                                const last = coords[coords.length - 1];
+                                
+                                // Use a small threshold for closing the polygon
+                                const CLOSE_THRESHOLD = 0.0001; // Adjust if needed
+                                const isClosed = 
+                                    Math.abs(first[0] - last[0]) < CLOSE_THRESHOLD && 
+                                    Math.abs(first[1] - last[1]) < CLOSE_THRESHOLD;
+
+                                if (!isClosed) {
+                                    coords.push(first);
                                 }
+
+                                polygons.push(coords);
                             }
                         });
+
+                        return polygons;
+                    };
+
+                    // Extract polygons with consistent method
+                    const regionPolygons = extractPolygonCoordinates(member);
+
+                    // Collect unique lat/lngs
+                    regionPolygons.forEach(polygon => {
+                        polygon.forEach(latlng => {
+                            allLatLngs.push(latlng);
+                        });
                     });
+
+                    if (regionPolygons.length > 0) {
+                        // Create feature group with consistent styling from the start
+                        const multiPolygonLayer = L.featureGroup(
+                            regionPolygons.map(polygonCoords => 
+                                L.polygon(polygonCoords, {
+                                    color: 'black',
+                                    weight: 1,
+                                    fillOpacity: 0,
+                                    fillColor: 'transparent'
+                                })
+                            )
+                        );
+                        
+                        let popupContent = `<b>${props.name}</b><br>Category: ${regionCat}<br>FID: ${fid}`;
+                        popupContent += `<br>Polygons: ${regionPolygons.length}`;
+                        popupContent += `<br>Max Sustained: ${props.maxSustained} km/h<br>Max Gust: ${props.maxGust} km/h`;
+                        
+                        multiPolygonLayer.bindPopup(popupContent);
+                        regionsLayerGroup.addLayer(multiPolygonLayer);
+                        
+                        // Store both the layer and its properties
+                        polygonLayers[fid] = {
+                            layer: multiPolygonLayer,
+                            properties: props
+                        };
+                        processedCount++;
+                        
+                        console.log(`Matched: ${name} (${fid}) -> ${regionCat}, Polygons: ${regionPolygons.length}`);
+                    }
                 });
                 
                 if (allLatLngs.length > 0) map.fitBounds(L.latLngBounds(allLatLngs), { padding: [50, 50] });
                 statusOverlay.style.display = 'none';
+                
+                debugInfo.innerHTML = `Loaded ${processedCount} regions from GML`;
+                console.log(`Processed ${processedCount} regions from GML`);
             }
+
             
-            function getWarningTier(windSpeed, maxWind) {
-                const tiers = ['RED', 'ORANGE', 'YELLOW'];
-                if (windSpeed > maxWind) return 'NONE';
-                for (const tier of tiers) {
-                    if (windSpeed >= WARNING_TIERS[tier].threshold) return tier;
-                }
+            // FIXED: Completely rewritten warning tier logic
+            function getTierByCategory(speed, categoryMax) {
+                if (!speed || speed <= 0) return 'NONE';
+                
+                // Calculate thresholds based on percentage of category maximum
+                // Yellow: 70% of max, Orange: 90% of max, Red: 110% of max (can exceed)
+                const yellowThreshold = Math.round(0.7 * categoryMax);
+                const orangeThreshold = Math.round(0.9 * categoryMax);
+                const redThreshold = Math.round(1.1 * categoryMax);
+                
+                if (speed >= redThreshold) return 'RED';
+                if (speed >= orangeThreshold) return 'ORANGE';
+                if (speed >= yellowThreshold) return 'YELLOW';
                 return 'NONE';
             }
 
-             function getLocalEffectTier(gustSpeed, thresholds) {
-                if (!thresholds) return 'NONE';
-                if (gustSpeed >= thresholds.RED) return 'RED';
-                if (gustSpeed >= thresholds.ORANGE) return 'ORANGE';
-                if (gustSpeed >= thresholds.YELLOW) return 'YELLOW';
-                return 'NONE';
-            }
-
+            
             function updateMapStyles() {
                 const sustainedSpeed = parseFloat(sustainedWindInput.value) || 0;
                 const gustSpeed = parseFloat(gustWindInput.value) || 0;
+                
+                console.log(`=== UPDATE MAP STYLES ===`);
+                console.log(`Input winds: sustained=${sustainedSpeed}, gust=${gustSpeed}`);
+                
+                let debugText = `Winds: ${sustainedSpeed}km/h sustained, ${gustSpeed}km/h gust<br>`;
+                let processedCount = 0;
+                let filledCount = 0;
 
+                // Precompute warning tiers for all regions to ensure consistent styling
+                const regionWarnings = {};
+
+                // First pass: determine tiers for all regions
                 for (const fid in polygonLayers) {
-                    const layer = polygonLayers[fid];
-                    const regionCat = regionProperties[fid]?.category || 'Inland';
-                    const props = CATEGORY_DEFS[regionCat];
+                    const layerData = polygonLayers[fid];
+                    const props = layerData.properties;
 
-                    // Determine sustained tier
-                    const sustainedTier = getWarningTier(sustainedSpeed, props.maxSustained);
+                    const sustainedTier = getTierByCategory(sustainedSpeed, props.maxSustained);
+                    const gustTier = getTierByCategory(gustSpeed, props.maxGust);
 
-                    // Determine gust tier
-                    const gustTier = getWarningTier(gustSpeed, props.maxGust);
+                    const tierOrder = ['NONE', 'YELLOW', 'ORANGE', 'RED'];
+                    const sustainedIdx = tierOrder.indexOf(sustainedTier);
+                    const gustIdx = tierOrder.indexOf(gustTier);
+                    const finalTier = tierOrder[Math.max(sustainedIdx, gustIdx)];
 
-                    // Use the higher tier between sustained and gust
-                    const fillTier = sustainedTier === 'NONE' ? gustTier : (gustTier === 'NONE' ? sustainedTier : (WARNING_TIERS[sustainedTier].threshold > WARNING_TIERS[gustTier].threshold ? sustainedTier : gustTier));
+                    regionWarnings[fid] = finalTier;
+                }
+
+                // Second pass: apply styles
+                for (const fid in polygonLayers) {
+                    const layerData = polygonLayers[fid];
+                    const layer = layerData.layer;
+                    const props = layerData.properties;
+                    
+                    processedCount++;
+
+                    const finalTier = regionWarnings[fid];
+
+                    console.log(`${props.name} (${fid}): Final Tier: ${finalTier}`);
+
+                    if (finalTier !== 'NONE') filledCount++;
 
                     const styleOptions = {
                         color: 'black',
-                        weight: 2,
-                        fillColor: WARNING_TIERS[fillTier].color,
-                        fillOpacity: fillTier === 'NONE' ? 0 : 0.6,
-                        fillPattern: null
+                        weight: 1,
+                        fillColor: WARNING_TIERS[finalTier].color,
+                        fillOpacity: finalTier === 'NONE' ? 0 : 0.6
                     };
 
-                    layer.setStyle(styleOptions);
+                    // Ensure ALL layers within the feature group get the EXACT same style
+                    layer.eachLayer(subLayer => {
+                        // Clone the style options to ensure no reference issues
+                        const exactStyleOptions = { ...styleOptions };
+                        subLayer.setStyle(exactStyleOptions);
+                    });
                 }
+                
+                debugText += `Processed ${processedCount} regions, filled ${filledCount} with warnings`;
+                debugInfo.innerHTML = debugText;
+                console.log(`Processed ${processedCount} regions, filled ${filledCount} with warnings`);
             }
 
             function resetMapStyles() {
                 sustainedWindInput.value = '';
                 gustWindInput.value = '';
+                let resetCount = 0;
+                
                 for (const fid in polygonLayers) {
-                    polygonLayers[fid].setStyle({
-                        color: 'black',
-                        weight: 1,
-                        fillOpacity: 0,
-                        fillPattern: null,
-                        fillColor: 'transparent'
-                    });
+                    const layerData = polygonLayers[fid];
+                    let layer;
+                    
+                    // Handle both old format (just layer) and new format (object with layer and properties)
+                    if (layerData.layer) {
+                        layer = layerData.layer;
+                    } else {
+                        layer = layerData;
+                    }
+                    
+                    if (layer) {
+                        layer.setStyle({
+                            color: 'black',
+                            weight: 1,
+                            fillOpacity: 0,
+                            fillPattern: null,
+                            fillColor: 'transparent'
+                        });
+                        resetCount++;
+                    }
                 }
+                
+                debugInfo.innerHTML = `Reset ${resetCount} regions to transparent`;
+                console.log(`Reset ${resetCount} regions`);
             }
             
             updateMapBtn.addEventListener('click', updateMapStyles);
