@@ -1487,3 +1487,4 @@
       <ogr:DEPICTN>coarse</ogr:DEPICTN>
     </ogr:land_standard_coarse>
   </gml:featureMember>
+</ogr:FeatureCollection>
