@@ -12,30 +12,104 @@
   body { margin:0; font-family: 'Inter', sans-serif; }
   #map { height:100vh; width:100vw; }
   .leaflet-popup-content-wrapper { background-color:#fff; color:#333; border-radius:8px; }
-  .tooltip { position:absolute; pointer-events:none; background:#fff; padding:4px 6px; border-radius:4px; border:1px solid #aaa; font-size:12px; opacity:0; }
+  .tooltip {
+    position:absolute;
+    pointer-events:none;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: 0;
+    z-index: 1100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transition: opacity 0.2s ease-in-out;
+    max-width: 300px;
+  }
+  .tooltip hr {
+    border: none;
+    border-top: 1px solid #ddd;
+    margin: 6px 0;
+  }
+  .tooltip-tier { font-weight: bold; }
+  .tooltip-tier.yellow { color: #dbbd10; }
+  .tooltip-tier.orange { color: #ff5900; }
+  .tooltip-tier.red { color: #ff0000; }
+  
+  /* Custom pattern for hatched legend item */
+  #legend-hatch {
+    background: repeating-linear-gradient(
+      -45deg,
+      #9ca3af,
+      #9ca3af 2px,
+      transparent 2px,
+      transparent 6px
+    );
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
 
+<!-- Wind Warning Reference Panel -->
 <div class="absolute top-4 left-4 p-4 z-[1000]">
   <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 w-80">
-    <h1 class="text-xl font-bold text-gray-800">Wind Warning Control</h1>
-    <div class="mt-4 space-y-4">
-      <div>
-        <label for="sustained-wind-input" class="block text-sm font-medium text-gray-700">Sustained Wind (km/h)</label>
-        <input type="number" id="sustained-wind-input" placeholder="e.g., 70" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+    <h1 class="text-xl font-bold text-gray-800">Wind Warning Reference</h1>
+    <div class="mt-4 flex space-x-4">
+      <div class="flex-1">
+        <label for="sustained-wind-input" class="block text-sm font-medium text-gray-700">Sustained (km/h)</label>
+        <input type="number" id="sustained-wind-input" placeholder="e.g., 70" step="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
       </div>
-      <div>
-        <label for="gust-wind-input" class="block text-sm font-medium text-gray-700">Gust Wind (km/h)</label>
-        <input type="number" id="gust-wind-input" placeholder="e.g., 100" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+      <div class="flex-1">
+        <label for="gust-wind-input" class="block text-sm font-medium text-gray-700">Gust (km/h)</label>
+        <input type="number" id="gust-wind-input" placeholder="e.g., 100" step="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
       </div>
     </div>
-    <div class="mt-4 flex space-x-2">
-      <button id="update-map-btn" class="flex-1 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">Update Map</button>
-      <button id="clear-map-btn" class="flex-1 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600">Clear</button>
+    
+    <!-- Wind Warning Map Legend -->
+    <div class="mt-6 pt-6 border-t border-gray-200">
+      <h2 class="text-lg font-bold text-gray-800">Map Legend</h2>
+      <ul class="mt-4 space-y-2">
+        <li class="flex items-center space-x-2">
+          <div class="w-6 h-6 rounded-md bg-transparent border-2 border-gray-300"></div>
+          <span class="text-gray-700">No Warning</span>
+        </li>
+        <li class="flex items-center space-x-2">
+          <div class="w-6 h-6 rounded-md bg-yellow-400 opacity-40"></div>
+          <span class="text-gray-700">Yellow Warning</span>
+        </li>
+        <li class="flex items-center space-x-2">
+          <div class="w-6 h-6 rounded-md bg-orange-500 opacity-40"></div>
+          <span class="text-gray-700">Orange Warning</span>
+        </li>
+        <li class="flex items-center space-x-2">
+          <div class="w-6 h-6 rounded-md bg-red-600 opacity-40"></div>
+          <span class="text-gray-700">Red Warning</span>
+        </li>
+        <li class="flex items-center space-x-2 mt-4 pt-4 border-t border-gray-200">
+          <div id="legend-hatch" class="w-6 h-6 rounded-md bg-gray-400"></div>
+          <span class="text-gray-700">Local Effect</span>
+        </li>
+      </ul>
     </div>
-    <div id="debug-info" class="mt-4 text-xs text-gray-500 bg-gray-100 p-2 rounded">Initializing...</div>
+
+  </div>
+</div>
+
+<!-- Jump to Region buttons in a separate container -->
+<div class="absolute bottom-4 left-4 p-4 z-[1000]">
+  <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4">
+    <h2 class="text-lg font-bold text-gray-800 mb-2">Jump to Region</h2>
+    <div class="grid grid-cols-2 gap-2">
+      <button id="ns-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">NS</button>
+      <button id="nb-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">NB</button>
+      <button id="pei-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">PEI</button>
+      <button id="iles-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">I-de-M</button>
+      <button id="nf-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">NF</button>
+      <button id="lab-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">LAB</button>
+    </div>
   </div>
 </div>
 
@@ -75,10 +149,10 @@ const REGION_CATEGORIES = {
   'Maritimes': ["4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","25","26","31","37","33","36","38","39","44","45","46","47","48","49"],
   'Landlocked NB': ["27","28","29","30","32","34","35","40","41","42","43"],
   'Coastal NL': ["50","51","52","53","54","55","56","64","65","66","67","69","70","71","74","75","76","77","78","79","80"],
-  'Landlocked NF': ["59","62","63","68"], 
+  'Landlocked NF': ["59","62","63","68"],
   'Landlocked Labrador': ["81","82","83","84","85"],
-  'Downslope NL': ["58","60","61","72","73"], 
-  'Wreckhouse': ["57"], 
+  'Downslope NL': ["58","60","61","72","73"],
+  'Wreckhouse': ["57"],
   'Les Suetes': ["24"]
 };
 
@@ -87,12 +161,10 @@ for(const cat in REGION_CATEGORIES){
   REGION_CATEGORIES[cat].forEach(fidNum => FID_TO_CATEGORY_MAP[`land_standard_coarse.${fidNum}`]=cat);
 }
 
-let polygonsData = []; // store parsed GML features
+let polygonsData = [];
 
-// --- Tooltip ---
 const tooltip = d3.select("#tooltip");
 
-// --- Parse GML ---
 function parseGML(gmlText){
   const parser = new DOMParser();
   const xml = parser.parseFromString(gmlText,"application/xml");
@@ -117,7 +189,6 @@ function parseGML(gmlText){
   });
 }
 
-// --- Draw polygons with D3 on Leaflet ---
 function drawMap(sustained=0,gust=0){
   g.selectAll("*").remove();
   const transform = d3.geoTransform({
@@ -136,8 +207,8 @@ function drawMap(sustained=0,gust=0){
     const parentT = (() => {
       const t = WARNING_CONFIG[parentCat].thresholds;
       if(sustained>=t.RED.sustained || gust>=t.RED.gust) return TIERS.RED;
-      else if(sustained>=t.ORANGE.sustained || gust>=t.ORANGE.gust) return TIERS.ORANGE;
-      else if(sustained>=t.YELLOW.sustained || gust>=t.YELLOW.gust) return TIERS.YELLOW;
+      if(sustained>=t.ORANGE.sustained || gust>=t.ORANGE.gust) return TIERS.ORANGE;
+      if(sustained>=t.YELLOW.sustained || gust>=t.YELLOW.gust) return TIERS.YELLOW;
       return TIERS.NONE;
     })();
 
@@ -145,63 +216,98 @@ function drawMap(sustained=0,gust=0){
       if(!isSpecial) return TIERS.NONE;
       const t = cfg.thresholds;
       if(sustained>=t.RED.sustained || gust>=t.RED.gust) return TIERS.RED;
-      else if(sustained>=t.ORANGE.sustained || gust>=t.ORANGE.gust) return TIERS.ORANGE;
-      else if(sustained>=t.YELLOW.sustained || gust>=t.YELLOW.gust) return TIERS.YELLOW;
+      if(sustained>=t.ORANGE.sustained || gust>=t.ORANGE.gust) return TIERS.ORANGE;
+      if(sustained>=t.YELLOW.sustained || gust>=t.YELLOW.gust) return TIERS.YELLOW;
       return TIERS.NONE;
     })();
 
-    const shouldHatch = specialT.level > 0;
+    const finalFillTier = parentT.level > specialT.level ? parentT : specialT;
+    const shouldHatch = isSpecial && specialT.level > 0;
 
     d.coordsList.forEach(polygon=>{
       const geo = {type:"Polygon",coordinates:[polygon.map(([lat,lon])=>[lon,lat])]};
       const pathD = pathGen(geo);
 
-      // --- Parent fill ---
       g.append("path")
         .attr("d", pathD)
-        .attr("fill", parentT.color)
+        .attr("fill", finalFillTier.color)
         .attr("fill-opacity",0.4)
         .attr("stroke","black")
         .attr("stroke-width",1)
+        .style("pointer-events", "all")
         .on("mousemove", event => {
-          // Determine applied tier and thresholds
-          let tierName = "NONE";
+          let tierName = finalFillTier.name;
           let thresholdsText = "";
+          let tooltipHtml = `<b>${d.name}</b><br>`;
+          
+          if (tierName !== 'NONE') {
+              const configSource = (isSpecial && specialT.level >= parentT.level) ? cfg : WARNING_CONFIG[parentCat];
+              const t = configSource.thresholds[tierName];
+              if (t) {
+                  thresholdsText = `Sustained ≥ ${t.sustained}, Gust ≥ ${t.gust} km/h`;
+              }
+              tooltipHtml += `Tier: <span class="tooltip-tier ${tierName.toLowerCase()}">${tierName}</span><br><span class="text-xs">${thresholdsText}</span>`;
+          } else {
+            tooltipHtml += 'No Warning';
+          }
 
-          if (specialT.level > 0) {
-            tierName = specialT.name;
-            const t = cfg.thresholds[tierName];
-            thresholdsText = `Sustained ≥ ${t.sustained} km/h, Gust ≥ ${t.gust} km/h`;
-          } else if (parentT.level > 0) {
-            tierName = parentT.name;
-            const t = WARNING_CONFIG[d.category].thresholds[tierName];
-            thresholdsText = `Sustained ≥ ${t.sustained} km/h, Gust ≥ ${t.gust} km/h`;
+          if (isSpecial && specialT.level > 0) {
+            const localThresholds = cfg.thresholds[specialT.name];
+            const localThresholdsText = `Sustained ≥ ${localThresholds.sustained}, Gust ≥ ${localThresholds.gust} km/h`;
+            tooltipHtml += `<hr>Local Effect Tier: <span class="tooltip-tier ${specialT.name.toLowerCase()}">${specialT.name}</span><br><span class="text-xs">${localThresholdsText}</span>`;
+          }
+
+          if (d.category === 'Landlocked NF' && gust === 90) {
+            tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), consider holding off on issuing a warning.</div>`;
+          }
+
+          if (d.category === 'Maritimes' && gust === 110) {
+            tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. along exposed parts of the coast), issue a <span class="tooltip-tier yellow">YELLOW</span> warning. </div>`;
+          }
+
+          if (d.category === 'Maritimes' && (gust === 130 || gust === 140)) {
+            tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. along exposed parts of the coast), issue an <span class="tooltip-tier orange">ORANGE</span> warning. </div>`;
+          }
+          
+          if (d.category === 'Landlocked NF' && gust === 110) {
+            tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), issue a <span class="tooltip-tier yellow">YELLOW</span> warning. </div>`;
+          }
+
+          if (d.category === 'Landlocked NF' && gust === 130) {
+            tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), issue an <span class="tooltip-tier orange">ORANGE</span> warning. </div>`;
+          }
+
+          if (d.category === 'Landlocked Labrador' && gust === 100) {
+            tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), issue a <span class="tooltip-tier yellow">YELLOW</span> warning. </div>`;
+          }
+
+          if (d.category === 'Landlocked Labrador' && gust === 110) {
+            tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), issue an <span class="tooltip-tier orange">ORANGE</span> warning. </div>`;
           }
 
           tooltip
             .style("left", (event.pageX + 10) + "px")
             .style("top", (event.pageY + 10) + "px")
             .style("opacity", 1)
-            .html(`<b>${d.name}</b><br>Tier: ${tierName}<br>${thresholdsText}`);
+            .html(tooltipHtml);
         })
         .on("mouseout", () => tooltip.style("opacity",0));
 
-      // --- Hatch overlay ---
       if(shouldHatch){
         g.append("path")
           .attr("d", pathD)
           .attr("fill","url(#hatch-" + specialT.name + ")")
           .attr("fill-opacity",1.0)
-          .attr("stroke","none");
+          .attr("stroke","none")
+          .style("pointer-events", "none");
       }
     });
   });
 }
 
-// --- Create hatch patterns with neon colors ---
 const defs = svg.append("defs");
-const hatchSize = 20;
-const lineThickness = 8;
+const hatchSize = 10;
+const lineThickness = 2;
 
 const hatchTiers = [
   { name: "YELLOW", color: "#FFFF00" },
@@ -218,38 +324,61 @@ hatchTiers.forEach(tier => {
     .attr("patternTransform","rotate(45)");
 
   pattern.append("line")
-    .attr("x1",0).attr("y1",0)
-    .attr("x2", hatchSize).attr("y2",0)
+    .attr("x1",0).attr("y1", hatchSize / 2)
+    .attr("x2", hatchSize).attr("y2", hatchSize / 2)
     .attr("stroke", tier.color)
     .attr("stroke-width", lineThickness)
-    .attr("stroke-linecap","butt");
+    .attr("stroke-linecap","square");
 });
 
-// --- Load GML ---
 async function loadGML(){
   try{
     const resp = await fetch("land_standard_exaggerated_atlantic.gml");
     const text = await resp.text();
     parseGML(text);
     drawMap();
-    d3.select("#debug-info").text(`Loaded ${polygonsData.length} regions.`);
   }catch(e){ console.error(e); }
 }
 
-map.on("zoomend moveend",()=>drawMap(
-  parseFloat(document.getElementById("sustained-wind-input").value)||0,
-  parseFloat(document.getElementById("gust-wind-input").value)||0
-));
+function updateOnPanZoom() {
+    drawMap(
+        parseFloat(document.getElementById("sustained-wind-input").value) || 0,
+        parseFloat(document.getElementById("gust-wind-input").value) || 0
+    );
+}
 
-document.getElementById("update-map-btn").addEventListener("click",()=>drawMap(
-  parseFloat(document.getElementById("sustained-wind-input").value)||0,
-  parseFloat(document.getElementById("gust-wind-input").value)||0
-));
-document.getElementById("clear-map-btn").addEventListener("click",()=>{
-  document.getElementById("sustained-wind-input").value="";
-  document.getElementById("gust-wind-input").value="";
-  drawMap();
-});
+map.on("zoomend moveend", updateOnPanZoom);
+
+const sustainedInput = document.getElementById("sustained-wind-input");
+const gustInput = document.getElementById("gust-wind-input");
+
+const rounder = (inputEl) => {
+    if (inputEl.value) {
+        const roundedValue = Math.round(parseFloat(inputEl.value) / 10) * 10;
+        inputEl.value = roundedValue;
+    }
+};
+
+sustainedInput.addEventListener("change", () => rounder(sustainedInput));
+sustainedInput.addEventListener("input", updateOnPanZoom);
+gustInput.addEventListener("change", () => rounder(gustInput));
+gustInput.addEventListener("input", updateOnPanZoom);
+
+const regions = {
+  ns: { coords: [45.1, -63.5], zoom: 8 },
+  nb: { coords: [46.5, -66.5], zoom: 8 },
+  pei: { coords: [46.25, -63.1], zoom: 9 },
+  iles: { coords: [47.38, -61.8], zoom: 10 },
+  nf: { coords: [49.1, -57.7], zoom: 7.5 },
+  lab: { coords: [53.7, -62], zoom: 7 }
+};
+
+document.getElementById('ns-btn').addEventListener('click', () => map.flyTo(regions.ns.coords, regions.ns.zoom));
+document.getElementById('nb-btn').addEventListener('click', () => map.flyTo(regions.nb.coords, regions.nb.zoom));
+document.getElementById('pei-btn').addEventListener('click', () => map.flyTo(regions.pei.coords, regions.pei.zoom));
+document.getElementById('iles-btn').addEventListener('click', () => map.flyTo(regions.iles.coords, regions.iles.zoom));
+document.getElementById('nf-btn').addEventListener('click', () => map.flyTo(regions.nf.coords, regions.nf.zoom));
+document.getElementById('lab-btn').addEventListener('click', () => map.flyTo(regions.lab.coords, regions.lab.zoom));
 
 loadGML();
 </script>
