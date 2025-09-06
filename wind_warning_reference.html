@@ -103,7 +103,7 @@
   </div>
   
   <div class="pt-2 border-t border-gray-200 text-center text-xs text-gray-500">
-    <span>v1.0.0</span><br>
+    <span>v1.0.1</span><br>
   </div>
 </div>
 
@@ -211,7 +211,8 @@ function drawMap(sustained=0,gust=0){
     const getTier = (config) => {
       const t = config.thresholds;
       if (sustained >= t.RED.sustained || gust >= t.RED.gust) return TIERS.RED;
-      if (sustained >= t.ORANGE.sustained || gust >= t.ORANGE.sustained) return TIERS.ORANGE;
+      // FIX: Changed 't.ORANGE.sustained' to 't.ORANGE.gust' to correctly compare gust values.
+      if (sustained >= t.ORANGE.sustained || gust >= t.ORANGE.gust) return TIERS.ORANGE;
       if (sustained >= t.YELLOW.sustained || gust >= t.YELLOW.gust) return TIERS.YELLOW;
       return TIERS.NONE;
     };
