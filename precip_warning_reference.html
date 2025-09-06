@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Precipitation Warning Reference - Atlantic</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  body { margin:0; font-family: 'Inter', sans-serif; }
+  #map { height:100vh; width:100vw; }
+  .leaflet-popup-content-wrapper { background-color:#fff; color:#333; border-radius:8px; }
+  .tooltip {
+    position:absolute;
+    pointer-events:none;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: 0;
+    z-index: 1100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transition: opacity 0.2s ease-in-out;
+    max-width: 300px;
+  }
+  .tooltip hr {
+    border: none;
+    border-top: 1px solid #ddd;
+    margin: 6px 0;
+  }
+  .tooltip-tier { font-weight: bold; }
+  .tooltip-tier.yellow { color: #dbbd10; }
+  .tooltip-tier.orange { color: #ff5900; }
+  .tooltip-tier.red { color: #ff0000; }
+  .tab-button.active {
+    background-color: #fff;
+    border-color: #e5e7eb;
+    border-bottom: 2px solid transparent;
+  }
+  .draggable-handle {
+    cursor: move;
+    height: 12px; /* A small area at the top to grab */
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="control-panel" class="absolute top-4 left-4 z-[1000] rounded-xl shadow-lg w-[20rem] bg-white/80 backdrop-blur-sm p-6">
+  <div class="draggable-handle"></div>
+  <h1 class="text-xl font-bold text-gray-800">Precipitation Warning Reference</h1>
+  <div class="mt-4 border-b border-gray-200">
+    <nav class="-mb-px flex space-x-2" aria-label="Tabs">
+      <button id="tab-rainfall" class="tab-button active flex-1 whitespace-nowrap py-2 px-4 border-b-2 font-medium text-lg text-gray-500 hover:text-gray-700"><span style="color: #16a34a; font-weight: bold;">💧 RA</span></button>
+      <button id="tab-snowfall" class="tab-button flex-1 whitespace-nowrap py-2 px-4 border-b-2 font-medium text-lg text-gray-500 hover:text-gray-700"><span style="color: #3b82f6; font-weight: bold;">❄️ SN</span></button>
+      <button id="tab-freezing-rain" class="tab-button flex-1 whitespace-nowrap py-2 px-4 border-b-2 font-medium text-lg text-gray-500 hover:text-gray-700"><span style="color: #d946ef; font-weight: bold;">🧊 FZRA</span></button>
+    </nav>
+  </div>
+  
+  <div id="content-rainfall" class="tab-content mt-4">
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="rainfall-input" class="block text-sm font-medium text-gray-700">Rainfall (mm)</label>
+        <input type="number" id="rainfall-input" placeholder="e.g., 50" step="5" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+      </div>
+      <div>
+        <label for="rainfall-duration-input" class="block text-sm font-medium text-gray-700">Duration (hours)</label>
+        <input type="number" id="rainfall-duration-input" placeholder="e.g., 24" value="24" step="12" max="48" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+      </div>
+    </div>
+  </div>
+  
+  <div id="content-snowfall" class="tab-content mt-4 hidden">
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="snowfall-input" class="block text-sm font-medium text-gray-700">Snowfall (cm)</label>
+        <input type="number" id="snowfall-input" placeholder="e.g., 20" step="5" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+      </div>
+      <div>
+        <label for="snowfall-duration-input" class="block text-sm font-medium text-gray-700">Duration (hours)</label>
+        <input type="number" id="snowfall-duration-input" placeholder="e.g., 24" value="12" step="12" max="48" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+      </div>
+    </div>
+  </div>
+
+  <div id="content-freezing-rain" class="tab-content mt-4 hidden">
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="freezing-rain-input" class="block text-sm font-medium text-gray-700">Freezing Rain (mm)</label>
+        <input type="number" id="freezing-rain-input" placeholder="e.g., 5" step="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+      </div>
+      <div>
+        <label for="freezing-rain-duration-input" class="block text-sm font-medium text-gray-700">Duration (hours)</label>
+        <input type="number" id="freezing-rain-duration-input" placeholder="e.g., 4" step="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+      </div>
+    </div>
+  </div>
+  
+  <div class="mt-4 pt-4 border-t border-gray-200">
+    <h2 class="text-lg font-bold text-gray-800">Map Legend</h2>
+    <ul class="mt-4 space-y-2 mb-6">
+      <li class="flex items-center space-x-2">
+        <div class="w-6 h-6 rounded-md bg-transparent border-2 border-gray-300"></div>
+        <span class="text-gray-700">No Warning</span>
+      </li>
+      <li class="flex items-center space-x-2">
+        <div class="w-6 h-6 rounded-md bg-yellow-400 opacity-40"></div>
+        <span class="text-gray-700">Yellow Warning</span>
+      </li>
+      <li class="flex items-center space-x-2">
+        <div class="w-6 h-6 rounded-md bg-orange-500 opacity-40"></div>
+        <span class="text-gray-700">Orange Warning</span>
+      </li>
+      <li class="flex items-center space-x-2">
+        <div class="w-6 h-6 rounded-md bg-red-600 opacity-40"></div>
+        <span class="text-gray-700">Red Warning</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="pt-2 border-t border-gray-200 text-center text-xs text-gray-500">
+    <span>v1.0.0</span><br>
+  </div>
+
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+<div id="loading-message" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl font-bold text-gray-500 z-[999]">
+  Loading map data...
+</div>
+
+<a href="wind_warning_reference.html" class="fixed bottom-4 left-4 z-[1000] bg-gray-100 text-gray-800 rounded-lg shadow-md p-2 border border-gray-300 transition-all duration-300 ease-in-out hover:bg-gray-200 hover:shadow-xl hover:shadow-gray-400/50">
+    <span class="text-base">🌬️ Wind Warnings</span>
+</a>
+
+<script>
+const map = L.map('map', { zoomControl: false }).setView([50.5, -58], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom:19, attribution:'&copy; OpenStreetMap'
+}).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+// D3 overlay
+const svgLayer = L.svg().addTo(map);
+const svg = d3.select("#map").select("svg");
+const g = svg.append("g").attr("class","d3-overlay");
+
+// --- Config ---
+const TIERS = {
+  RED:    { name: 'RED', level: 3, color: '#dc2626' },
+  ORANGE: { name: 'ORANGE', level: 2, color: '#f97316' },
+  YELLOW: { name: 'YELLOW', level: 1, color: '#facc15' },
+  NONE:   { name: 'NONE', level: 0, color: 'transparent' }
+};
+
+const RAIN_WARNING_CRITERIA = {
+  'summer': {
+    YELLOW: { amount: 50, duration: 24, text: '≥ 50 mm in ≤ 24 hours' },
+    ORANGE: { amount: 100, duration: 24, text: '≥ 100 mm in ≤ 24 hours' },
+    RED: [
+      { amount: 200, duration: 24, text: '≥ 200 mm in ≤ 24 hours' },
+      { amount: 300, duration: 48, text: '≥ 300 mm in ≤ 48 hours' }
+    ]
+  },
+  'winter': {
+    YELLOW: { amount: 25, duration: 24, text: '≥ 25 mm in ≤ 24 hours' },
+    ORANGE: { amount: 75, duration: 24, text: '≥ 75 mm in ≤ 24 hours' },
+    RED: [
+      { amount: 150, duration: 24, text: '≥ 150 mm in ≤ 24 hours' },
+      { amount: 200, duration: 48, text: '≥ 200 mm in ≤ 48 hours' }
+    ]
+  }
+};
+
+const SNOW_WARNING_CRITERIA = {
+  YELLOW: { amount: 15, duration: 12, text: '≥ 15 cm in ≤ 12 hours' },
+  ORANGE: { amount: 30, duration: 24, text: '≥ 30 cm in ≤ 24 hours' },
+  RED: [
+    { amount: 60, duration: 24, text: '≥ 60 cm in ≤ 24 hours' },
+    { amount: 100, duration: 48, text: '≥ 100 cm in ≤ 48 hours' }
+  ]
+};
+
+// Simplified freezing rain criteria
+const FREEZING_RAIN_CRITERIA = {
+  YELLOW: { amount: 5, duration: 4, text: 'Duration ≥ 4 hours, or freezing rain amounts ≥ 5 mm' },
+  ORANGE: { amount: 15, duration: 8, text: 'Duration ≥ 8 hours, or freezing rain amounts ≥ 15 mm' },
+  RED: { amount: 30, duration: 24, text: 'Duration ≥ 24 hours, or freezing rain amounts ≥ 30 mm' }
+};
+
+
+// --- Config ---
+const PROVINCE_GROUPS = {
+  'Nova Scotia': ["4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26"],
+  'New Brunswick': ["27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46"],
+  'Prince Edward Island': ["47","48","49"],
+  'Newfoundland': ["50","51","52","53","54","55","56","57","58","59","60","61","62","63","64","65","66","67","68","69","70","71","72","73"],
+  'Labrador': ["74","75","76","77","78","79","80","81","82","83","84","85"],
+  'Quebec': ["131"]
+};
+
+const FID_TO_CATEGORY_MAP = {};
+for(const cat in PROVINCE_GROUPS){
+  PROVINCE_GROUPS[cat].forEach(fidNum => FID_TO_CATEGORY_MAP[`land_standard_coarse.${fidNum}`]=cat);
+}
+
+const FID_TO_NAME_MAP = {};
+let polygonsData = [];
+const tooltip = d3.select("#tooltip");
+let seasonalCriteria = {};
+const loadingMessage = document.getElementById("loading-message");
+
+function getTier(value, duration, criteria, isFreezingRain = false) {
+  if (isFreezingRain) {
+    if (value >= criteria.RED.amount || duration >= criteria.RED.duration) {
+      return { tier: TIERS.RED, text: criteria.RED.text };
+    }
+    if (value >= criteria.ORANGE.amount || duration >= criteria.ORANGE.duration) {
+      return { tier: TIERS.ORANGE, text: criteria.ORANGE.text };
+    }
+    if (value >= criteria.YELLOW.amount || duration >= criteria.YELLOW.duration) {
+      return { tier: TIERS.YELLOW, text: criteria.YELLOW.text };
+    }
+  } else {
+    // Check for multi-condition RED tier
+    if (Array.isArray(criteria.RED)) {
+      for (const condition of criteria.RED) {
+        if (value >= condition.amount && duration <= condition.duration) {
+          return { tier: TIERS.RED, text: condition.text };
+        }
+      }
+    } else {
+        if (value >= criteria.RED.amount && duration <= criteria.RED.duration) {
+            return { tier: TIERS.RED, text: criteria.RED.text };
+        }
+    }
+
+    // Check for multi-condition ORANGE tier
+    if (Array.isArray(criteria.ORANGE)) {
+      for (const condition of criteria.ORANGE) {
+        if (value >= condition.amount && duration <= condition.duration) {
+          return { tier: TIERS.ORANGE, text: condition.text };
+        }
+      }
+    } else {
+        if (value >= criteria.ORANGE.amount && duration <= criteria.ORANGE.duration) {
+            return { tier: TIERS.ORANGE, text: criteria.ORANGE.text };
+        }
+    }
+    
+    // Check for multi-condition YELLOW tier
+    if (Array.isArray(criteria.YELLOW)) {
+      for (const condition of criteria.YELLOW) {
+        if (value >= condition.amount && duration <= condition.duration) {
+          return { tier: TIERS.YELLOW, text: condition.YELLOW.text };
+        }
+      }
+    } else {
+        if (value >= criteria.YELLOW.amount && duration <= criteria.YELLOW.duration) {
+            return { tier: TIERS.YELLOW, text: criteria.YELLOW.text };
+        }
+    }
+  }
+  return { tier: TIERS.NONE, text: 'No Warning' };
+}
+
+
+function drawMap(rainfall=0, rainDuration=0, snowfall=0, snowDuration=0, freezingRain=0, freezingRainDuration=0){
+  g.selectAll("*").remove();
+  const transform = d3.geoTransform({
+    point: function(x,y){
+      const p = map.latLngToLayerPoint(new L.LatLng(y,x));
+      this.stream.point(p.x,p.y);
+    }
+  });
+  const pathGen = d3.geoPath().projection(transform);
+  
+  polygonsData.forEach(d=>{
+    const season = seasonalCriteria[d.fid] || 'summer';
+    
+    const rainTier = getTier(rainfall, rainDuration, RAIN_WARNING_CRITERIA[season]);
+    const snowTier = getTier(snowfall, snowDuration, SNOW_WARNING_CRITERIA);
+    const freezingRainTier = getTier(freezingRain, freezingRainDuration, FREEZING_RAIN_CRITERIA, true);
+    
+    const allTiers = [rainTier, snowTier, freezingRainTier];
+    const fillTier = allTiers.sort((a, b) => b.tier.level - a.tier.level)[0];
+
+    d.coordsList.forEach(polygon=>{
+      const geo = {type:"Polygon",coordinates:[polygon.map(([lat,lon])=>[lon,lat])]};
+      const pathD = pathGen(geo);
+
+      g.append("path")
+        .attr("d", pathD)
+        .attr("fill", fillTier.tier.color)
+        .attr("fill-opacity", fillTier.tier.level > 0 ? 0.4 : 0)
+        .attr("stroke", "black")
+        .attr("stroke-width", 1)
+        .style("pointer-events", "all")
+        .on("mousemove", event => {
+          let tooltipHtml = `<b>${d.name}</b><br>`;
+          if (fillTier.tier.name !== 'NONE') {
+              let warningTypeHtml = '';
+              
+              if (fillTier === rainTier) {
+                warningTypeHtml = '<span style="color: #16a34a; font-weight: bold;">💧 Rainfall</span>';
+              } else if (fillTier === snowTier) {
+                warningTypeHtml = '<span style="color: #3b82f6; font-weight: bold;">❄️ Snowfall</span>';
+              } else {
+                warningTypeHtml = '<span style="color: #d946ef; font-weight: bold;">🧊 Freezing Rain</span>';
+              }
+
+              tooltipHtml += `<hr>Warning: <span class="tooltip-tier ${fillTier.tier.name.toLowerCase()}">${fillTier.tier.name}</span><br>`;
+              tooltipHtml += `Type: ${warningTypeHtml}<br>`;
+              tooltipHtml += `Criteria: ${fillTier.text}`;
+              if (fillTier === rainTier) {
+                const criteriaText = seasonalCriteria[d.fid] || 'summer';
+                tooltipHtml += `<br>Season: ${criteriaText.charAt(0).toUpperCase() + criteriaText.slice(1)}`;
+              }
+          } else {
+            tooltipHtml += 'No Warning';
+          }
+
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px")
+            .style("opacity", 1)
+            .html(tooltipHtml);
+        })
+        .on("mouseout", () => tooltip.style("opacity",0));
+    });
+  });
+}
+
+async function loadGML(){
+  try{
+    console.log("Attempting to load GML file...");
+    const resp = await fetch("land_standard_exaggerated_atlantic.gml");
+    if (!resp.ok) {
+        throw new Error(`Failed to load GML: ${resp.status} ${resp.statusText}`);
+    }
+    const text = await resp.text();
+    parseGML(text);
+    console.log("GML file loaded successfully.");
+    fetchSeasonalCriteria();
+  }catch(e){ 
+    console.error("Error loading GML file:", e); 
+    loadingMessage.textContent = "Error loading map data. Please check file paths.";
+  }
+}
+
+async function fetchSeasonalCriteria() {
+    try {
+        console.log("Attempting to load seasonal criteria file...");
+        const response = await fetch('admin/seasonal_criteria.json');
+        if (response.ok) {
+            seasonalCriteria = await response.json();
+            console.log("Seasonal criteria file loaded successfully.");
+        } else {
+            console.warn('seasonal_criteria.json not found. Defaulting to summer criteria for all regions.');
+        }
+    } catch (e) {
+        console.error('Error fetching seasonal_criteria.json:', e);
+    }
+    loadingMessage.style.display = 'none'; // Hide loading message once data is loaded
+    updateMap();
+}
+
+function parseGML(gmlText){
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(gmlText,"application/xml");
+  const members = xml.querySelectorAll("gml\\:featureMember, featureMember");
+  polygonsData = [];
+  members.forEach(member=>{
+    const fid = member.firstElementChild.getAttribute("fid");
+    const name = member.querySelector("ogr\\:NAME, NAME")?.textContent || fid;
+    const category = FID_TO_CATEGORY_MAP[fid] || "Maritimes";
+    
+    FID_TO_NAME_MAP[fid] = name;
+
+    const coordTags = member.querySelectorAll("gml\\:coordinates, coordinates");
+    const coordsList = [];
+    coordTags.forEach(tag=>{
+      const coords = tag.textContent.trim().split(/\s+/).map(c=>{
+        const [lon,lat] = c.split(",").map(parseFloat);
+        return [lat,lon];
+      }).filter(Boolean);
+      if(coords.length>3) coordsList.push(coords);
+    });
+    if(coordsList.length>0){
+      polygonsData.push({fid,name,category,coordsList});
+    }
+  });
+}
+
+function updateMap() {
+    const rainfall = parseFloat(document.getElementById("rainfall-input").value) || 0;
+    const rainDuration = parseFloat(document.getElementById("rainfall-duration-input").value) || Infinity;
+    const snowfall = parseFloat(document.getElementById("snowfall-input").value) || 0;
+    const snowDuration = parseFloat(document.getElementById("snowfall-duration-input").value) || Infinity;
+    const freezingRain = parseFloat(document.getElementById("freezing-rain-input").value) || 0;
+    const freezingRainDuration = parseFloat(document.getElementById("freezing-rain-duration-input").value) || 0;
+    
+    drawMap(rainfall, rainDuration, snowfall, snowDuration, freezingRain, freezingRainDuration);
+}
+
+map.on("zoomend moveend", updateMap);
+
+const tabButtons = document.querySelectorAll('.tab-button');
+const tabContents = document.querySelectorAll('.tab-content');
+
+tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        // Deactivate all tabs and contents
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => {
+            content.classList.add('hidden');
+            
+            // Selective clearing of inputs based on the tab's ID
+            if (content.id === 'content-freezing-rain') {
+                content.querySelectorAll('input').forEach(input => input.value = '');
+            } else if (content.id === 'content-rainfall') {
+                document.getElementById('rainfall-input').value = '';
+            } else if (content.id === 'content-snowfall') {
+                document.getElementById('snowfall-input').value = '';
+            }
+        });
+
+        // Activate the clicked tab and its content
+        button.classList.add('active');
+        const contentId = button.id.replace('tab-', 'content-');
+        document.getElementById(contentId).classList.remove('hidden');
+        
+        // Trigger map update after a short delay
+        setTimeout(updateMap, 50);
+    });
+});
+
+const inputs = document.querySelectorAll('input[type="number"]');
+inputs.forEach(input => {
+    input.addEventListener("input", updateMap);
+});
+
+loadGML();
+
+function makeDraggable(elementId) {
+  const element = document.getElementById(elementId);
+  const handle = element.querySelector('.draggable-handle');
+
+  let isDragging = false;
+  let offsetX, offsetY;
+
+  handle.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    offsetX = e.clientX - element.offsetLeft;
+    offsetY = e.clientY - element.offsetTop;
+    e.preventDefault(); // Prevents unwanted text selection
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+
+    element.style.left = `${e.clientX - offsetX}px`;
+    element.style.top = `${e.clientY - offsetY}px`;
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+}
+
+// Make the UI panels draggable
+makeDraggable('control-panel');
+</script>
+</body>
+</html>

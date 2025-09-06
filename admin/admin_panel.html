@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Panel - Rainfall Criteria</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f3f4f6;
+  }
+</style>
+</head>
+<body class="p-8">
+  <div class="max-w-9xl mx-auto bg-white rounded-xl shadow-lg p-6">
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Manage Rainfall Criteria</h1>
+    <p class="text-sm text-gray-600 mb-6">
+      Select the seasonal criteria for each region and click 'Copy' to get the JSON to paste into your repo.
+    </p>
+
+    <div class="space-y-4 max-h-[60vh] overflow-y-auto p-2">
+      <div id="region-criteria-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+        <!-- Radio button groups will be dynamically added here -->
+      </div>
+    </div>
+
+    <div class="mt-8 pt-4 border-t border-gray-200 flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-bold text-gray-800 mb-2">Copy Criteria to Clipboard</h2>
+            <p class="text-sm text-gray-600 mb-4">
+                Click the button to copy the `seasonal_criteria.json` content to your clipboard.
+            </p>
+        </div>
+        <div class="flex flex-col items-end">
+            <button id="copy-button" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                Copy JSON to Clipboard
+            </button>
+            <span id="copy-message" class="text-sm text-green-600 mt-2 opacity-0 transition-opacity duration-300">Copied!</span>
+        </div>
+    </div>
+  </div>
+
+<script>
+// --- Config ---
+const PROVINCE_GROUPS = {
+  'Nova Scotia': ["4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26"],
+  'New Brunswick': ["27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44","45","46"],
+  'Prince Edward Island': ["47","48","49"],
+  'Newfoundland': ["50","51","52","53","54","55","56","57","58","59","60","61","62","63","64","65","66","67","68","69","70","71","72","73"],
+  'Labrador': ["74","75","76","77","78","79","80","81","82","83","84","85"],
+  'Quebec': ["131"]
+};
+
+const FID_TO_PROVINCE_MAP = {};
+for(const province in PROVINCE_GROUPS){
+  PROVINCE_GROUPS[province].forEach(fidNum => FID_TO_PROVINCE_MAP[`land_standard_coarse.${fidNum}`]=province);
+}
+
+const FID_TO_NAME_MAP = {};
+
+function getSeasonalCriteria() {
+  const criteria = {};
+  document.querySelectorAll('#region-criteria-list input[type="radio"]:checked').forEach(radio => {
+    const fid = radio.value;
+    const season = radio.dataset.season;
+    criteria[fid] = season;
+  });
+  return criteria;
+}
+
+async function copyJsonToClipboard() {
+    const criteria = getSeasonalCriteria();
+    const jsonString = JSON.stringify(criteria, null, 2);
+    const copyMessage = document.getElementById('copy-message');
+
+    try {
+        await navigator.clipboard.writeText(jsonString);
+        copyMessage.textContent = 'Copied!';
+        copyMessage.classList.add('opacity-100');
+        setTimeout(() => {
+            copyMessage.classList.remove('opacity-100');
+        }, 2000);
+    } catch (err) {
+        console.error('Failed to copy text: ', err);
+        copyMessage.textContent = 'Failed to copy!';
+        copyMessage.classList.add('text-red-600', 'opacity-100');
+        setTimeout(() => {
+            copyMessage.classList.remove('text-red-600', 'opacity-100');
+        }, 2000);
+    }
+}
+
+function populateRegionRadioButtons(existingCriteria = {}) {
+    const listContainer = document.getElementById('region-criteria-list');
+    listContainer.innerHTML = '';
+    
+    for (const province in PROVINCE_GROUPS) {
+        const provinceWrapper = document.createElement('div');
+        provinceWrapper.className = 'bg-gray-100 rounded-lg p-4';
+
+        const provinceHeading = document.createElement('h2');
+        provinceHeading.className = 'text-xl font-bold text-gray-800 mb-2';
+        provinceHeading.textContent = province;
+        provinceWrapper.appendChild(provinceHeading);
+
+        const regionList = document.createElement('div');
+        regionList.className = 'space-y-4';
+        
+        const regionFIDsInProvince = PROVINCE_GROUPS[province].map(fid => `land_standard_coarse.${fid}`);
+        const sortedFIDs = regionFIDsInProvince.sort((a, b) => {
+            const nameA = FID_TO_NAME_MAP[a] || '';
+            const nameB = FID_TO_NAME_MAP[b] || '';
+            return nameA.localeCompare(nameB);
+        });
+        
+        sortedFIDs.forEach(fid => {
+            const name = FID_TO_NAME_MAP[fid];
+            if (!name) return; // Skip if name is not found
+            
+            const container = document.createElement('div');
+            container.className = 'p-3 bg-white rounded-md border border-gray-200';
+            
+            const heading = document.createElement('h3');
+            heading.className = 'font-bold text-gray-800 mb-2';
+            heading.textContent = name;
+            container.appendChild(heading);
+            
+            const radioGroup = document.createElement('div');
+            radioGroup.className = 'flex space-x-4 text-sm';
+
+            const summerLabel = document.createElement('label');
+            summerLabel.className = 'flex items-center space-x-2 cursor-pointer';
+            const summerRadio = document.createElement('input');
+            summerRadio.type = 'radio';
+            summerRadio.name = `season-${fid}`;
+            summerRadio.value = fid;
+            summerRadio.dataset.season = 'summer';
+            // Set checked based on the existing criteria, default to true if none exists.
+            summerRadio.checked = existingCriteria[fid] === 'summer' || existingCriteria[fid] === undefined;
+            summerRadio.className = 'form-radio text-blue-600';
+            const summerSpan = document.createElement('span');
+            summerSpan.textContent = 'Summer';
+            summerLabel.appendChild(summerRadio);
+            summerLabel.appendChild(summerSpan);
+
+            const winterLabel = document.createElement('label');
+            winterLabel.className = 'flex items-center space-x-2 cursor-pointer';
+            const winterRadio = document.createElement('input');
+            winterRadio.type = 'radio';
+            winterRadio.name = `season-${fid}`;
+            winterRadio.value = fid;
+            winterRadio.dataset.season = 'winter';
+            // Set checked based on the existing criteria.
+            winterRadio.checked = existingCriteria[fid] === 'winter';
+            winterRadio.className = 'form-radio text-blue-600';
+            const winterSpan = document.createElement('span');
+            winterSpan.textContent = 'Winter';
+            winterLabel.appendChild(winterRadio);
+            winterLabel.appendChild(winterSpan);
+
+            radioGroup.appendChild(summerLabel);
+            radioGroup.appendChild(winterLabel);
+            container.appendChild(radioGroup);
+            regionList.appendChild(container);
+        });
+        provinceWrapper.appendChild(regionList);
+        listContainer.appendChild(provinceWrapper);
+    }
+}
+
+async function loadExistingCriteria() {
+    try {
+        const resp = await fetch("seasonal_criteria.json");
+        if (resp.status === 200) {
+            const criteria = await resp.json();
+            return criteria;
+        }
+    } catch (e) {
+        console.error("Failed to load existing criteria file:", e);
+    }
+    return {};
+}
+
+async function loadGML(){
+  try{
+    const resp = await fetch("../land_standard_exaggerated_atlantic.gml");
+    const text = await resp.text();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text,"application/xml");
+    const members = xml.querySelectorAll("gml\\:featureMember, featureMember");
+    
+    members.forEach(member=>{
+      const fid = member.firstElementChild.getAttribute("fid");
+      const name = member.querySelector("ogr\\:NAME, NAME")?.textContent || fid;
+      FID_TO_NAME_MAP[fid] = name;
+    });
+
+    const existingCriteria = await loadExistingCriteria();
+    populateRegionRadioButtons(existingCriteria);
+  }catch(e){ console.error(e); }
+}
+
+document.getElementById('copy-button').addEventListener('click', copyJsonToClipboard);
+
+loadGML();
+</script>
+</body>
+</html>

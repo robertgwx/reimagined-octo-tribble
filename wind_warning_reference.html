@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Atlantic Forecast Regions Wind Warnings</title>
+<title>Wind Warning Reference - Atlantic</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -37,81 +37,90 @@
   .tooltip-tier.yellow { color: #dbbd10; }
   .tooltip-tier.orange { color: #ff5900; }
   .tooltip-tier.red { color: #ff0000; }
+  .draggable-handle {
+    cursor: move;
+    height: 12px;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
 
 <!-- Wind Warning Reference Panel -->
-<div class="absolute top-4 left-4 p-4 z-[1000]">
-  <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 w-80">
-    <h1 class="text-xl font-bold text-gray-800">Wind Warning Reference</h1>
-    <div class="mt-4 flex space-x-4">
-      <div class="flex-1">
-        <label for="sustained-wind-input" class="block text-sm font-medium text-gray-700">Sustained (km/h)</label>
-        <input type="number" id="sustained-wind-input" placeholder="e.g., 70" step="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-      </div>
-      <div class="flex-1">
-        <label for="gust-wind-input" class="block text-sm font-medium text-gray-700">Gust (km/h)</label>
-        <input type="number" id="gust-wind-input" placeholder="e.g., 100" step="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-      </div>
+<div id="control-panel" class="absolute top-4 left-4 z-[1000] rounded-xl shadow-lg w-[20rem] bg-white/80 backdrop-blur-sm p-6">
+  <div class="draggable-handle"></div>
+  <h1 class="text-xl font-bold text-gray-800">Wind Warning Reference</h1>
+  <div class="mt-4 flex space-x-4">
+    <div class="flex-1">
+      <label for="sustained-wind-input" class="block text-sm font-medium text-gray-700">Sustained (km/h)</label>
+      <input type="number" id="sustained-wind-input" placeholder="e.g., 70" step="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
     </div>
-    
-    <div class="mt-4">
-        <label for="localized-gusts-select" class="block text-sm font-medium text-gray-700">SCRIBE Exception</label>
-        <select id="localized-gusts-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-            <option value="none">None</option>
-            <option value="exposed-areas">over exposed areas</option>
-            <option value="exposed-coast">along exposed areas of the coast</option>
-            <option value="parts-coast">along parts of the coast</option>
-            <option value="the-coast">along the coast</option>
-            <option value="downslope-flow">along the coast in locally enhanced downslope flow</option>
-            <option value="wreckhouse">in the Wreckhouse area</option>
-            <option value="les-suetes">from Margaree Harbour to Bay St. Lawrence</option>
-        </select>
+    <div class="flex-1">
+      <label for="gust-wind-input" class="block text-sm font-medium text-gray-700">Gust (km/h)</label>
+      <input type="number" id="gust-wind-input" placeholder="e.g., 100" step="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
     </div>
+  </div>
+  
+  <div class="mt-4">
+      <label for="localized-gusts-select" class="block text-sm font-medium text-gray-700">SCRIBE Exception</label>
+      <select id="localized-gusts-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+          <option value="none">None</option>
+          <option value="exposed-areas">over exposed areas</option>
+          <option value="exposed-coast">along exposed areas of the coast</option>
+          <option value="parts-coast">along parts of the coast</option>
+          <option value="the-coast">along the coast</option>
+          <option value="downslope-flow">along the coast in locally enhanced downslope flow</option>
+          <option value="wreckhouse">in the Wreckhouse area</option>
+          <option value="les-suetes">from Margaree Harbour to Bay St. Lawrence</option>
+      </select>
+  </div>
 
-    <!-- Wind Warning Map Legend -->
-    <div class="mt-6 pt-6 border-t border-gray-200">
-      <h2 class="text-lg font-bold text-gray-800">Map Legend</h2>
-      <ul class="mt-4 space-y-2">
-        <li class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded-md bg-transparent border-2 border-gray-300"></div>
-          <span class="text-gray-700">No Warning</span>
-        </li>
-        <li class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded-md bg-yellow-400 opacity-40"></div>
-          <span class="text-gray-700">Yellow Warning</span>
-        </li>
-        <li class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded-md bg-orange-500 opacity-40"></div>
-          <span class="text-gray-700">Orange Warning</span>
-        </li>
-        <li class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded-md bg-red-600 opacity-40"></div>
-          <span class="text-gray-700">Red Warning</span>
-        </li>
-      </ul>
-    </div>
+  <!-- Wind Warning Map Legend -->
+  <div class="mt-4 pt-4 border-t border-gray-200">
+    <h2 class="text-lg font-bold text-gray-800">Map Legend</h2>
+    <ul class="mt-4 space-y-2 mb-6">
+      <li class="flex items-center space-x-2">
+        <div class="w-6 h-6 rounded-md bg-transparent border-2 border-gray-300"></div>
+        <span class="text-gray-700">No Warning</span>
+      </li>
+      <li class="flex items-center space-x-2">
+        <div class="w-6 h-6 rounded-md bg-yellow-400 opacity-40"></div>
+        <span class="text-gray-700">Yellow Warning</span>
+      </li>
+      <li class="flex items-center space-x-2">
+        <div class="w-6 h-6 rounded-md bg-orange-500 opacity-40"></div>
+        <span class="text-gray-700">Orange Warning</span>
+      </li>
+      <li class="flex items-center space-x-2">
+        <div class="w-6 h-6 rounded-md bg-red-600 opacity-40"></div>
+        <span class="text-gray-700">Red Warning</span>
+      </li>
+    </ul>
+  </div>
+  
+  <div class="pt-2 border-t border-gray-200 text-center text-xs text-gray-500">
+    <span>v1.0.0</span><br>
   </div>
 </div>
 
 <!-- Link to other warning types -->
-<div class="absolute bottom-4 left-4 p-4 z-[1000]">
-  <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4">
-    <a href="rainfall_warnings.html" class="block w-full text-center bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
-      View Rainfall & Snowfall Warnings
-    </a>
-  </div>
-</div>
+<a href="precip_warning_reference.html" class="fixed bottom-4 left-4 z-[1000] bg-gray-100 text-gray-800 rounded-lg shadow-md p-2 border border-gray-300 transition-all duration-300 ease-in-out hover:bg-gray-200 hover:shadow-xl hover:shadow-gray-400/50">
+    <span class="text-base">💧❄️ Precipitation Warnings</span>
+</a>
 
 <div class="tooltip" id="tooltip"></div>
 
 <script>
-const map = L.map('map').setView([50.5, -58], 6);
+const map = L.map('map', { zoomControl: false }).setView([50.5, -58], 6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom:19, attribution:'&copy; OpenStreetMap'
 }).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
 
 // D3 overlay
 const svgLayer = L.svg().addTo(map);
@@ -202,7 +211,7 @@ function drawMap(sustained=0,gust=0){
     const getTier = (config) => {
       const t = config.thresholds;
       if (sustained >= t.RED.sustained || gust >= t.RED.gust) return TIERS.RED;
-      if (sustained >= t.ORANGE.sustained || gust >= t.ORANGE.gust) return TIERS.ORANGE;
+      if (sustained >= t.ORANGE.sustained || gust >= t.ORANGE.sustained) return TIERS.ORANGE;
       if (sustained >= t.YELLOW.sustained || gust >= t.YELLOW.gust) return TIERS.YELLOW;
       return TIERS.NONE;
     };
@@ -312,7 +321,7 @@ function drawMap(sustained=0,gust=0){
           if (tooltipNote) {
              tooltipHtml += `<hr><div class="text-xs italic text-gray-600">${tooltipNote}</div>`;
           } else if (tierName !== 'NONE') {
-              const configSource = WARNING_CONFIG[d.category];
+              const configSource = isSpecial && selectedException === "none" ? cfg : parentConfig;
               const t = configSource.thresholds[tierName];
               if (t) {
                   thresholdsText = `Sustained ≥ ${t.sustained}, Gust ≥ ${t.gust} km/h`;
@@ -369,6 +378,35 @@ gustInput.addEventListener("input", updateOnPanZoom);
 localizedGustsSelect.addEventListener("change", updateOnPanZoom);
 
 loadGML();
+
+function makeDraggable(elementId) {
+  const element = document.getElementById(elementId);
+  const handle = element.querySelector('.draggable-handle');
+
+  let isDragging = false;
+  let offsetX, offsetY;
+
+  handle.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    offsetX = e.clientX - element.offsetLeft;
+    offsetY = e.clientY - element.offsetTop;
+    e.preventDefault(); // Prevents unwanted text selection
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+
+    element.style.left = `${e.clientX - offsetX}px`;
+    element.style.top = `${e.clientY - offsetY}px`;
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
+}
+
+// Make the UI panels draggable
+makeDraggable('control-panel');
 </script>
 </body>
 </html>
