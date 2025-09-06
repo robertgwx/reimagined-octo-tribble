@@ -37,17 +37,6 @@
   .tooltip-tier.yellow { color: #dbbd10; }
   .tooltip-tier.orange { color: #ff5900; }
   .tooltip-tier.red { color: #ff0000; }
-  
-  /* Custom pattern for hatched legend item */
-  #legend-hatch {
-    background: repeating-linear-gradient(
-      -45deg,
-      #9ca3af,
-      #9ca3af 2px,
-      transparent 2px,
-      transparent 6px
-    );
-  }
 </style>
 </head>
 <body>
@@ -68,9 +57,18 @@
       </div>
     </div>
     
-    <div class="mt-4 flex items-center">
-        <input type="checkbox" id="localized-gusts-checkbox" class="h-4 w-4 text-blue-600 rounded">
-        <label for="localized-gusts-checkbox" class="ml-2 block text-sm text-gray-900">Localized gusts?</label>
+    <div class="mt-4">
+        <label for="localized-gusts-select" class="block text-sm font-medium text-gray-700">SCRIBE Exception</label>
+        <select id="localized-gusts-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+            <option value="none">None</option>
+            <option value="exposed-areas">over exposed areas</option>
+            <option value="exposed-coast">along exposed areas of the coast</option>
+            <option value="parts-coast">along parts of the coast</option>
+            <option value="the-coast">along the coast</option>
+            <option value="downslope-flow">along the coast in locally enhanced downslope flow</option>
+            <option value="wreckhouse">in the Wreckhouse area</option>
+            <option value="les-suetes">from Margaree Harbour to Bay St. Lawrence</option>
+        </select>
     </div>
 
     <!-- Wind Warning Map Legend -->
@@ -93,28 +91,17 @@
           <div class="w-6 h-6 rounded-md bg-red-600 opacity-40"></div>
           <span class="text-gray-700">Red Warning</span>
         </li>
-        <li class="flex items-center space-x-2 mt-4 pt-4 border-t border-gray-200">
-          <div id="legend-hatch" class="w-6 h-6 rounded-md bg-gray-400"></div>
-          <span class="text-gray-700">Local Effect</span>
-        </li>
       </ul>
     </div>
-
   </div>
 </div>
 
-<!-- Jump to Region buttons in a separate container -->
+<!-- Link to other warning types -->
 <div class="absolute bottom-4 left-4 p-4 z-[1000]">
   <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4">
-    <h2 class="text-lg font-bold text-gray-800 mb-2">Jump to Region</h2>
-    <div class="grid grid-cols-2 gap-2">
-      <button id="ns-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">NS</button>
-      <button id="nb-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">NB</button>
-      <button id="pei-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">PEI</button>
-      <button id="iles-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">I-de-M</button>
-      <button id="nf-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">NF</button>
-      <button id="lab-btn" class="bg-blue-500 text-white text-sm py-1 px-3 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">LAB</button>
-    </div>
+    <a href="rainfall_warnings.html" class="block w-full text-center bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+      View Rainfall & Snowfall Warnings
+    </a>
   </div>
 </div>
 
@@ -133,9 +120,9 @@ const g = svg.append("g").attr("class","d3-overlay");
 
 // --- Config ---
 const TIERS = {
-  RED:    { name: 'RED', level: 3, color: '#dc2626', hatchColor: '#b91c1c' },
-  ORANGE: { name: 'ORANGE', level: 2, color: '#f97316', hatchColor: '#ea580c' },
-  YELLOW: { name: 'YELLOW', level: 1, color: '#facc15', hatchColor: '#eab308' },
+  RED:    { name: 'RED', level: 3, color: '#dc2626' },
+  ORANGE: { name: 'ORANGE', level: 2, color: '#f97316' },
+  YELLOW: { name: 'YELLOW', level: 1, color: '#facc15' },
   NONE:   { name: 'NONE', level: 0, color: 'transparent' }
 };
 
@@ -203,7 +190,7 @@ function drawMap(sustained=0,gust=0){
     }
   });
   const pathGen = d3.geoPath().projection(transform);
-  const isLocalized = document.getElementById("localized-gusts-checkbox").checked;
+  const selectedException = document.getElementById("localized-gusts-select").value;
 
   polygonsData.forEach(d=>{
     const cfg = WARNING_CONFIG[d.category];
@@ -220,47 +207,91 @@ function drawMap(sustained=0,gust=0){
       return TIERS.NONE;
     };
     
-    let parentTier = getTier(parentConfig);
-    let specialTier = isSpecial ? getTier(cfg) : TIERS.NONE;
+    let fillTier = TIERS.NONE;
+    let tooltipNote = '';
     
-    let finalFillTier = TIERS.NONE;
-    let showTooltipNote = false;
-
-    // First, determine the base fill tier for the polygon.
-    // This logic now correctly applies the localized rule to the parent category.
-    if (isLocalized) {
-        if (parentCat === 'Maritimes' && gust === 110) {
-            finalFillTier = TIERS.YELLOW;
-            showTooltipNote = true;
-        } else if (parentCat === 'Maritimes' && (gust === 130 || gust === 140)) {
-            finalFillTier = TIERS.ORANGE;
-            showTooltipNote = true;
-        } else if (parentCat === 'Landlocked NF' && gust === 90) {
-             finalFillTier = TIERS.NONE;
-             showTooltipNote = true;
-        } else if (parentCat === 'Landlocked NF' && gust === 110) {
-             finalFillTier = TIERS.YELLOW;
-             showTooltipNote = true;
-        } else if (parentCat === 'Landlocked NF' && gust === 130) {
-             finalFillTier = TIERS.ORANGE;
-             showTooltipNote = true;
-        } else if (parentCat === 'Landlocked Labrador' && gust === 100) {
-             finalFillTier = TIERS.YELLOW;
-             showTooltipNote = true;
-        } else if (parentCat === 'Landlocked Labrador' && gust === 110) {
-             finalFillTier = TIERS.ORANGE;
-             showTooltipNote = true;
+    // Logic for coloring based on the dropdown selection
+    switch(selectedException) {
+      case 'wreckhouse':
+        if (d.category === 'Wreckhouse') {
+          fillTier = getTier(cfg);
         } else {
-            // No specific localized override, use the general parent tier
-            finalFillTier = parentTier;
+          fillTier = TIERS.NONE;
         }
-    } else {
-        // Not localized, use the higher of parent or special for the fill color
-        finalFillTier = parentTier.level > specialTier.level ? parentTier : specialTier;
+        break;
+      case 'downslope-flow':
+        if (d.category === 'Downslope NL') {
+          fillTier = getTier(cfg);
+        } else {
+          fillTier = TIERS.NONE;
+        }
+        break;
+      case 'les-suetes':
+        if (d.category === 'Les Suetes') {
+          fillTier = getTier(cfg);
+        } else {
+          fillTier = TIERS.NONE;
+        }
+        break;
+      case 'exposed-areas':
+        // This handles localized gusts for Landlocked NF
+        if (d.category.includes('Landlocked')) {
+            if (d.category === 'Landlocked NF' && gust === 90) {
+                 fillTier = TIERS.NONE;
+                 tooltipNote = '"Over exposed areas" exception used - therefore no warning is necessary. Use your discretion.';
+            } else if (d.category === 'Landlocked NF' && gust === 110) {
+                 fillTier = TIERS.YELLOW;
+                 tooltipNote = '"Over exposed areas" exception used - issue a <span class="tooltip-tier yellow">YELLOW</span> warning.';
+            } else if (d.category === 'Landlocked NF' && gust === 130) {
+                 fillTier = TIERS.ORANGE;
+                 tooltipNote = '"Over exposed areas" exception used - issue an <span class="tooltip-tier orange">ORANGE</span> warning.';
+            } else if (d.category === 'Landlocked Labrador' && gust === 100) {
+                 fillTier = TIERS.YELLOW;
+                 tooltipNote = '"Over exposed areas" exception used - issue a <span class="tooltip-tier yellow">YELLOW</span> warning.';
+            } else if (d.category === 'Landlocked Labrador' && gust === 110) {
+                 fillTier = TIERS.ORANGE;
+                 tooltipNote = '"Over exposed areas" exception used - issue an <span class="tooltip-tier orange">ORANGE</span> warning.';
+            } else {
+                 fillTier = getTier(parentConfig);
+            }
+        } else {
+            fillTier = getTier(parentConfig);
+        }
+        break;
+      case 'exposed-coast':
+        if (d.category.includes('Landlocked')) {
+            fillTier = TIERS.NONE;
+            tooltipNote = "No Coastal Areas - No Warning";
+        } else if (parentCat === 'Maritimes' || d.category === 'Maritimes' || d.category === 'Coastal NL') {
+            if (gust === 110) {
+                 fillTier = TIERS.YELLOW;
+                 tooltipNote = '"Along exposed areas of the coast" exception used - issue a <span class="tooltip-tier yellow">YELLOW</span> warning.';
+            } else if (gust === 130 || gust === 140) {
+                 fillTier = TIERS.ORANGE;
+                 tooltipNote = '"Along exposed areas of the coast" exception used - issue an <span class="tooltip-tier orange">ORANGE</span> warning.';
+            } else {
+                 fillTier = getTier(parentConfig);
+            }
+        } else {
+            fillTier = getTier(parentConfig);
+        }
+        break;
+      case 'parts-coast':
+      case 'the-coast':
+        if (d.category.includes('Landlocked')) {
+            fillTier = TIERS.NONE;
+            tooltipNote = "No Coastal Areas - No Warning";
+        } else {
+            fillTier = getTier(parentConfig);
+        }
+        break;
+      default:
+        // Default behavior (no exception selected)
+        const specialTier = isSpecial ? getTier(cfg) : TIERS.NONE;
+        const parentTier = getTier(parentConfig);
+        fillTier = parentTier.level > specialTier.level ? parentTier : specialTier;
+        break;
     }
-    
-    // Hatching is determined only by the special tier
-    let shouldHatch = isSpecial && specialTier.level > 0;
 
     d.coordsList.forEach(polygon=>{
       const geo = {type:"Polygon",coordinates:[polygon.map(([lat,lon])=>[lon,lat])]};
@@ -268,18 +299,20 @@ function drawMap(sustained=0,gust=0){
 
       g.append("path")
         .attr("d", pathD)
-        .attr("fill", finalFillTier.color)
-        .attr("fill-opacity",0.4)
-        .attr("stroke","black")
-        .attr("stroke-width",1)
+        .attr("fill", fillTier.color)
+        .attr("fill-opacity", fillTier.level > 0 ? 0.4 : 0) // No fill opacity for 'NONE'
+        .attr("stroke", "black")
+        .attr("stroke-width", 1)
         .style("pointer-events", "all")
         .on("mousemove", event => {
-          let tierName = finalFillTier.name;
+          let tierName = fillTier.name;
           let thresholdsText = "";
           let tooltipHtml = `<b>${d.name}</b><br>`;
           
-          if (tierName !== 'NONE') {
-              const configSource = parentConfig; 
+          if (tooltipNote) {
+             tooltipHtml += `<hr><div class="text-xs italic text-gray-600">${tooltipNote}</div>`;
+          } else if (tierName !== 'NONE') {
+              const configSource = WARNING_CONFIG[d.category];
               const t = configSource.thresholds[tierName];
               if (t) {
                   thresholdsText = `Sustained ≥ ${t.sustained}, Gust ≥ ${t.gust} km/h`;
@@ -289,35 +322,6 @@ function drawMap(sustained=0,gust=0){
             tooltipHtml += 'No Warning';
           }
 
-          if (isSpecial && specialTier.level > 0) {
-            const localThresholds = cfg.thresholds[specialTier.name];
-            const localThresholdsText = `Sustained ≥ ${localThresholds.sustained}, Gust ≥ ${localThresholds.gust} km/h`;
-            tooltipHtml += `<hr>${d.category}: <span class="tooltip-tier ${specialTier.name.toLowerCase()}">${specialTier.name}</span><br><span class="text-xs">${localThresholdsText}</span>`;
-          }
-
-          if (showTooltipNote) {
-             if (parentCat === 'Landlocked NF' && gust === 90) {
-                 tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), consider holding off on issuing a warning.</div>`;
-             }
-             if (parentCat === 'Maritimes' && gust === 110) {
-                 tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. along exposed parts of the coast), issue a <span class="tooltip-tier yellow">YELLOW</span> warning. </div>`;
-             }
-             if (parentCat === 'Maritimes' && (gust === 130 || gust === 140)) {
-                 tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. along exposed parts of the coast), issue an <span class="tooltip-tier orange">ORANGE</span> warning. </div>`;
-             }
-             if (parentCat === 'Landlocked NF' && gust === 110) {
-                 tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), issue a <span class="tooltip-tier yellow">YELLOW</span> warning. </div>`;
-             }
-             if (parentCat === 'Landlocked NF' && gust === 130) {
-                 tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), issue an <span class="tooltip-tier orange">ORANGE</span> warning. </div>`;
-             }
-             if (parentCat === 'Landlocked Labrador' && gust === 100) {
-                 tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), issue a <span class="tooltip-tier yellow">YELLOW</span> warning. </div>`;
-             }
-             if (parentCat === 'Landlocked Labrador' && gust === 110) {
-                 tooltipHtml += `<hr><div class="text-xs italic text-gray-600">Note: If gusts are localized (i.e. over exposed areas), issue an <span class="tooltip-tier orange">ORANGE</span> warning. </div>`;
-             }
-          }
           tooltip
             .style("left", (event.pageX + 10) + "px")
             .style("top", (event.pageY + 10) + "px")
@@ -325,44 +329,9 @@ function drawMap(sustained=0,gust=0){
             .html(tooltipHtml);
         })
         .on("mouseout", () => tooltip.style("opacity",0));
-
-      if(shouldHatch){
-        g.append("path")
-          .attr("d", pathD)
-          .attr("fill","url(#hatch-" + specialTier.name + ")")
-          .attr("fill-opacity",1.0)
-          .attr("stroke","none")
-          .style("pointer-events", "none");
-      }
     });
   });
 }
-
-const defs = svg.append("defs");
-const hatchSize = 10;
-const lineThickness = 2;
-
-const hatchTiers = [
-  { name: "YELLOW", color: "#FFFF00" },
-  { name: "ORANGE", color: "#FF9500" },
-  { name: "RED",    color: "#FF3333" }
-];
-
-hatchTiers.forEach(tier => {
-  const pattern = defs.append("pattern")
-    .attr("id","hatch-" + tier.name)
-    .attr("patternUnits","userSpaceOnUse")
-    .attr("width", hatchSize)
-    .attr("height", hatchSize)
-    .attr("patternTransform","rotate(45)");
-
-  pattern.append("line")
-    .attr("x1",0).attr("y1", hatchSize / 2)
-    .attr("x2", hatchSize).attr("y2", hatchSize / 2)
-    .attr("stroke", tier.color)
-    .attr("stroke-width", lineThickness)
-    .attr("stroke-linecap","square");
-});
 
 async function loadGML(){
   try{
@@ -384,7 +353,7 @@ map.on("zoomend moveend", updateOnPanZoom);
 
 const sustainedInput = document.getElementById("sustained-wind-input");
 const gustInput = document.getElementById("gust-wind-input");
-const localizedGustsCheckbox = document.getElementById("localized-gusts-checkbox");
+const localizedGustsSelect = document.getElementById("localized-gusts-select");
 
 const rounder = (inputEl) => {
     if (inputEl.value) {
@@ -397,23 +366,7 @@ sustainedInput.addEventListener("change", () => rounder(sustainedInput));
 gustInput.addEventListener("change", () => rounder(gustInput));
 sustainedInput.addEventListener("input", updateOnPanZoom);
 gustInput.addEventListener("input", updateOnPanZoom);
-localizedGustsCheckbox.addEventListener("change", updateOnPanZoom);
-
-const regions = {
-  ns: { coords: [44.7, -63.5], zoom: 7 },
-  nb: { coords: [46.5, -66.5], zoom: 8 },
-  pei: { coords: [46.25, -63.1], zoom: 9 },
-  iles: { coords: [47.38, -61.8], zoom: 10 },
-  nf: { coords: [48.5, -57.5], zoom: 7 },
-  lab: { coords: [53.5, -62], zoom: 6 }
-};
-
-document.getElementById('ns-btn').addEventListener('click', () => map.flyTo(regions.ns.coords, regions.ns.zoom));
-document.getElementById('nb-btn').addEventListener('click', () => map.flyTo(regions.nb.coords, regions.nb.zoom));
-document.getElementById('pei-btn').addEventListener('click', () => map.flyTo(regions.pei.coords, regions.pei.zoom));
-document.getElementById('iles-btn').addEventListener('click', () => map.flyTo(regions.iles.coords, regions.iles.zoom));
-document.getElementById('nf-btn').addEventListener('click', () => map.flyTo(regions.nf.coords, regions.nf.zoom));
-document.getElementById('lab-btn').addEventListener('click', () => map.flyTo(regions.lab.coords, regions.lab.zoom));
+localizedGustsSelect.addEventListener("change", updateOnPanZoom);
 
 loadGML();
 </script>
