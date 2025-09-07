@@ -8,6 +8,9 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://d3js.org/d3.v7.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   body { margin:0; font-family: 'Inter', sans-serif; }
   #map { height:100vh; width:100vw; }
@@ -45,6 +48,53 @@
     top: 0;
     left: 0;
   }
+  .collapsible-content {
+    max-height: 500px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out;
+  }
+  .collapsible-content.collapsed {
+    max-height: 0;
+  }
+  .unit-toggle-container {
+    display: flex;
+    background-color: #e5e7eb;
+    border-radius: 9999px;
+    overflow: hidden;
+    height: 32px;
+    width: 120px;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  }
+  .unit-toggle-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    font-weight: 500;
+    color: #6b7280;
+    position: relative;
+    z-index: 2;
+  }
+  .unit-toggle-btn.active {
+    color: white;
+  }
+  .unit-toggle-background {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    width: 58px;
+    background-color: #2563eb;
+    border-radius: 9999px;
+    transition: transform 0.3s ease-in-out;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+    z-index: 1;
+  }
+  .unit-toggle-background.kt {
+    transform: translateX(58px);
+  }
 </style>
 </head>
 <body>
@@ -56,11 +106,11 @@
   <h1 class="text-xl font-bold text-gray-800">Wind Warning Reference</h1>
   <div class="mt-4 flex space-x-4">
     <div class="flex-1">
-      <label for="sustained-wind-input" class="block text-sm font-medium text-gray-700">Sustained (km/h)</label>
+      <label for="sustained-wind-input" id="sustained-label" class="block text-sm font-medium text-gray-700">Sustained (km/h)</label>
       <input type="number" id="sustained-wind-input" placeholder="e.g., 70" step="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
     </div>
     <div class="flex-1">
-      <label for="gust-wind-input" class="block text-sm font-medium text-gray-700">Gust (km/h)</label>
+      <label for="gust-wind-input" id="gust-label" class="block text-sm font-medium text-gray-700">Gust (km/h)</label>
       <input type="number" id="gust-wind-input" placeholder="e.g., 100" step="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
     </div>
   </div>
@@ -68,15 +118,24 @@
   <div class="mt-4">
       <label for="localized-gusts-select" class="block text-sm font-medium text-gray-700">SCRIBE Exception</label>
       <select id="localized-gusts-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-          <option value="none">None</option>
+          <option value="none">(none)</option>
           <option value="exposed-areas">over exposed areas</option>
           <option value="exposed-coast">along exposed areas of the coast</option>
           <option value="parts-coast">along parts of the coast</option>
           <option value="the-coast">along the coast</option>
-          <option value="downslope-flow">along the coast in locally enhanced downslope flow</option>
+          <option value="downslope-NL">along the coast in locally enhanced downslope flow</option>
           <option value="wreckhouse">in the Wreckhouse area</option>
           <option value="les-suetes">from Margaree Harbour to Bay St. Lawrence</option>
       </select>
+  </div>
+  
+  <!-- Unit Toggle Buttons -->
+  <div class="mt-4 flex items-center justify-center space-x-4">
+    <div id="unit-toggle-container" class="unit-toggle-container">
+        <div id="unit-toggle-background" class="unit-toggle-background"></div>
+        <div id="kmh-btn" class="unit-toggle-btn active">km/h</div>
+        <div id="kt-btn" class="unit-toggle-btn">kt</div>
+    </div>
   </div>
 
   <!-- Wind Warning Map Legend -->
@@ -102,8 +161,31 @@
     </ul>
   </div>
   
-  <div class="pt-2 border-t border-gray-200 text-center text-xs text-gray-500">
-    <span>v1.0.1</span><br>
+  <!-- Instructions Panel (Collapsible) -->
+  <div class="mt-4 pt-4 border-t border-gray-200">
+    <div class="flex justify-between items-center cursor-pointer" id="instructions-header">
+      <h2 class="text-lg font-bold text-gray-800">How to Use</h2>
+      <button class="text-gray-500 hover:text-gray-800 focus:outline-none" id="instructions-toggle-btn">
+        <svg id="chevron-right" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+        <svg id="chevron-down" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 hidden">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+    </div>
+    <div id="instructions-content" class="collapsible-content collapsed mt-4">
+      <ul class="space-y-2 text-sm text-gray-700">
+        <li>1. Enter forecasted sustained, gust, or sustained and gust speeds.</li>
+        <li>2. Select a SCRIBE exception, if applicable.</li>
+        <li>3. The map will automatically update with the corresponding warning tiers.</li>
+        <li>4. Hover over a region to see the warning criteria and other important information.</li>
+        <li>5. This panel is draggable!</li>
+      </ul>
+      <div class="pt-2 border-t border-gray-200 text-center text-xs text-gray-500 mt-4">
+        <span>v1.1.0</span><br>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -162,9 +244,18 @@ for(const cat in REGION_CATEGORIES){
   REGION_CATEGORIES[cat].forEach(fidNum => FID_TO_CATEGORY_MAP[`land_standard_coarse.${fidNum}`]=cat);
 }
 
+// Map special category names to their exception values
+const categoryToException = {
+    'Wreckhouse': 'wreckhouse',
+    'Les Suetes': 'les-suetes',
+    'Downslope NL': 'downslope-NL'
+};
+
 let polygonsData = [];
 
 const tooltip = d3.select("#tooltip");
+let currentUnitIsKmH = true;
+const KMH_TO_KTS_CONVERSION = 0.539957;
 
 function parseGML(gmlText){
   const parser = new DOMParser();
@@ -190,7 +281,7 @@ function parseGML(gmlText){
   });
 }
 
-function drawMap(sustained=0,gust=0){
+function drawMap(sustained, gust){
   g.selectAll("*").remove();
   const transform = d3.geoTransform({
     point: function(x,y){
@@ -199,7 +290,9 @@ function drawMap(sustained=0,gust=0){
     }
   });
   const pathGen = d3.geoPath().projection(transform);
-  const selectedException = document.getElementById("localized-gusts-select").value;
+  const localizedGustsSelect = document.getElementById("localized-gusts-select");
+  const selectedException = localizedGustsSelect.value;
+  const selectedOptionText = localizedGustsSelect.options[localizedGustsSelect.selectedIndex].text;
 
   polygonsData.forEach(d=>{
     const cfg = WARNING_CONFIG[d.category];
@@ -211,7 +304,6 @@ function drawMap(sustained=0,gust=0){
     const getTier = (config) => {
       const t = config.thresholds;
       if (sustained >= t.RED.sustained || gust >= t.RED.gust) return TIERS.RED;
-      // FIX: Changed 't.ORANGE.sustained' to 't.ORANGE.gust' to correctly compare gust values.
       if (sustained >= t.ORANGE.sustained || gust >= t.ORANGE.gust) return TIERS.ORANGE;
       if (sustained >= t.YELLOW.sustained || gust >= t.YELLOW.gust) return TIERS.YELLOW;
       return TIERS.NONE;
@@ -229,7 +321,7 @@ function drawMap(sustained=0,gust=0){
           fillTier = TIERS.NONE;
         }
         break;
-      case 'downslope-flow':
+      case 'downslope-NL':
         if (d.category === 'Downslope NL') {
           fillTier = getTier(cfg);
         } else {
@@ -244,23 +336,31 @@ function drawMap(sustained=0,gust=0){
         }
         break;
       case 'exposed-areas':
-        // This handles localized gusts for Landlocked NF
+        // This handles localized gusts for Landlocked NL
         if (d.category.includes('Landlocked')) {
-            if (d.category === 'Landlocked NF' && gust === 90) {
-                 fillTier = TIERS.NONE;
-                 tooltipNote = '"Over exposed areas" exception used - therefore no warning is necessary. Use your discretion.';
-            } else if (d.category === 'Landlocked NF' && gust === 110) {
-                 fillTier = TIERS.YELLOW;
-                 tooltipNote = '"Over exposed areas" exception used - issue a <span class="tooltip-tier yellow">YELLOW</span> warning.';
-            } else if (d.category === 'Landlocked NF' && gust === 130) {
-                 fillTier = TIERS.ORANGE;
-                 tooltipNote = '"Over exposed areas" exception used - issue an <span class="tooltip-tier orange">ORANGE</span> warning.';
-            } else if (d.category === 'Landlocked Labrador' && gust === 100) {
-                 fillTier = TIERS.YELLOW;
-                 tooltipNote = '"Over exposed areas" exception used - issue a <span class="tooltip-tier yellow">YELLOW</span> warning.';
-            } else if (d.category === 'Landlocked Labrador' && gust === 110) {
-                 fillTier = TIERS.ORANGE;
-                 tooltipNote = '"Over exposed areas" exception used - issue an <span class="tooltip-tier orange">ORANGE</span> warning.';
+            if (d.category === 'Landlocked NF') {
+                if (gust === 90) {
+                     fillTier = TIERS.NONE;
+                     tooltipNote = '"Over exposed areas" exception used - therefore no warning is necessary. Use your discretion.';
+                } else if (gust === 110) {
+                     fillTier = TIERS.YELLOW;
+                     tooltipNote = '"Over exposed areas" exception used - issue a <span class="tooltip-tier yellow">YELLOW</span> warning.';
+                } else if (gust === 130) {
+                     fillTier = TIERS.ORANGE;
+                     tooltipNote = '"Over exposed areas" exception used - issue an <span class="tooltip-tier orange">ORANGE</span> warning.';
+                } else {
+                     fillTier = getTier(parentConfig);
+                }
+            } else if (d.category === 'Landlocked Labrador') {
+                if (gust === 100) {
+                     fillTier = TIERS.YELLOW;
+                     tooltipNote = '"Over exposed areas" exception used - issue a <span class="tooltip-tier yellow">YELLOW</span> warning.';
+                } else if (gust === 110) {
+                     fillTier = TIERS.ORANGE;
+                     tooltipNote = '"Over exposed areas" exception used - issue an <span class="tooltip-tier orange">ORANGE</span> warning.';
+                } else {
+                     fillTier = getTier(parentConfig);
+                }
             } else {
                  fillTier = getTier(parentConfig);
             }
@@ -303,6 +403,15 @@ function drawMap(sustained=0,gust=0){
         break;
     }
 
+    // Add a note for special regions. This only displays if the region has a warning.
+    if (isSpecial) {
+        if (selectedException === categoryToException[d.category]) {
+            tooltipNote = `<b><u>NOTE:</u></b> The displayed tier is for <b>${d.category} only</b>.`;
+        } else if (selectedException === 'none' && fillTier.level > 0) {
+            tooltipNote = `<b><u>NOTE:</u></b> The displayed tier is for main condition winds. If you want to see the tier for <b>${d.category}</b>, select the appropriate SCRIBE exception.`;
+        }
+    }
+
     d.coordsList.forEach(polygon=>{
       const geo = {type:"Polygon",coordinates:[polygon.map(([lat,lon])=>[lon,lat])]};
       const pathD = pathGen(geo);
@@ -310,26 +419,46 @@ function drawMap(sustained=0,gust=0){
       g.append("path")
         .attr("d", pathD)
         .attr("fill", fillTier.color)
-        .attr("fill-opacity", fillTier.level > 0 ? 0.4 : 0) // No fill opacity for 'NONE'
+        .attr("fill-opacity", fillTier.level > 0 ? 0.4 : 0)
         .attr("stroke", "black")
         .attr("stroke-width", 1)
         .style("pointer-events", "all")
         .on("mousemove", event => {
           let tierName = fillTier.name;
-          let thresholdsText = "";
-          let tooltipHtml = `<b>${d.name}</b><br>`;
+          let tooltipHtml = `<b>${d.name}</b><hr>`;
           
-          if (tooltipNote) {
-             tooltipHtml += `<hr><div class="text-xs italic text-gray-600">${tooltipNote}</div>`;
-          } else if (tierName !== 'NONE') {
-              const configSource = isSpecial && selectedException === "none" ? cfg : parentConfig;
-              const t = configSource.thresholds[tierName];
+          if (tierName !== 'NONE') {
+              let tooltipConfig = parentConfig;
+              if (isSpecial && selectedException === categoryToException[d.category]) {
+                tooltipConfig = cfg;
+              } else if (isSpecial && selectedException === 'none') {
+                const specialTier = getTier(cfg);
+                const parentTier = getTier(parentConfig);
+                if (specialTier.level > parentTier.level) {
+                  tooltipConfig = cfg;
+                }
+              }
+              
+              const t = tooltipConfig.thresholds[tierName];
+              let thresholdsText = "";
+              let sustainedValue = t.sustained;
+              let gustValue = t.gust;
+              
+              if (!currentUnitIsKmH) {
+                  sustainedValue = Math.round(sustainedValue * KMH_TO_KTS_CONVERSION);
+                  gustValue = Math.round(gustValue * KMH_TO_KTS_CONVERSION);
+              }
+              
               if (t) {
-                  thresholdsText = `Sustained ≥ ${t.sustained}, Gust ≥ ${t.gust} km/h`;
+                  thresholdsText = `Sustained ≥ ${sustainedValue}, Gust ≥ ${gustValue} ${currentUnitIsKmH ? 'km/h' : 'kts'}`;
               }
               tooltipHtml += `Tier: <span class="tooltip-tier ${tierName.toLowerCase()}">${tierName}</span><br><span class="text-xs">${thresholdsText}</span>`;
           } else {
-            tooltipHtml += 'No Warning';
+            tooltipHtml += 'Warning Criteria Not Met';
+          }
+          
+          if (tooltipNote) {
+             tooltipHtml += `<hr><div class="text-xs italic text-gray-600">${tooltipNote}</div>`;
           }
 
           tooltip
@@ -348,35 +477,75 @@ async function loadGML(){
     const resp = await fetch("land_standard_exaggerated_atlantic.gml");
     const text = await resp.text();
     parseGML(text);
-    drawMap();
+    updateMap();
   }catch(e){ console.error(e); }
 }
 
-function updateOnPanZoom() {
-    drawMap(
-        parseFloat(document.getElementById("sustained-wind-input").value) || 0,
-        parseFloat(document.getElementById("gust-wind-input").value) || 0
-    );
+function updateMap() {
+    let sustainedKmH = parseFloat(sustainedInput.value) || 0;
+    let gustKmH = parseFloat(gustInput.value) || 0;
+    
+    if (!currentUnitIsKmH) {
+      sustainedKmH = sustainedKmH / KMH_TO_KTS_CONVERSION;
+      gustKmH = gustKmH / KMH_TO_KTS_CONVERSION;
+    }
+
+    drawMap(sustainedKmH, gustKmH);
 }
 
-map.on("zoomend moveend", updateOnPanZoom);
+map.on("zoomend moveend", updateMap);
 
 const sustainedInput = document.getElementById("sustained-wind-input");
 const gustInput = document.getElementById("gust-wind-input");
+const sustainedLabel = document.getElementById("sustained-label");
+const gustLabel = document.getElementById("gust-label");
 const localizedGustsSelect = document.getElementById("localized-gusts-select");
 
-const rounder = (inputEl) => {
-    if (inputEl.value) {
-        const roundedValue = Math.round(parseFloat(inputEl.value) / 10) * 10;
-        inputEl.value = roundedValue;
-    }
-};
+sustainedInput.addEventListener("input", updateMap);
+gustInput.addEventListener("input", updateMap);
+localizedGustsSelect.addEventListener("change", updateMap);
 
-sustainedInput.addEventListener("change", () => rounder(sustainedInput));
-gustInput.addEventListener("change", () => rounder(gustInput));
-sustainedInput.addEventListener("input", updateOnPanZoom);
-gustInput.addEventListener("input", updateOnPanZoom);
-localizedGustsSelect.addEventListener("change", updateOnPanZoom);
+const kmhBtn = document.getElementById('kmh-btn');
+const ktBtn = document.getElementById('kt-btn');
+const toggleBackground = document.getElementById('unit-toggle-background');
+
+kmhBtn.addEventListener('click', () => {
+    if (!currentUnitIsKmH) {
+        let sustainedValue = parseFloat(sustainedInput.value) || 0;
+        let gustValue = parseFloat(gustInput.value) || 0;
+
+        sustainedInput.value = Math.round(sustainedValue / KMH_TO_KTS_CONVERSION);
+        gustInput.value = Math.round(gustValue / KMH_TO_KTS_CONVERSION);
+        
+        sustainedLabel.textContent = "Sustained (km/h)";
+        gustLabel.textContent = "Gust (km/h)";
+
+        currentUnitIsKmH = true;
+        kmhBtn.classList.add('active');
+        ktBtn.classList.remove('active');
+        toggleBackground.classList.remove('kt');
+        updateMap();
+    }
+});
+
+ktBtn.addEventListener('click', () => {
+    if (currentUnitIsKmH) {
+        let sustainedValue = parseFloat(sustainedInput.value) || 0;
+        let gustValue = parseFloat(gustInput.value) || 0;
+        
+        sustainedInput.value = Math.ceil(sustainedValue * KMH_TO_KTS_CONVERSION);
+        gustInput.value = Math.ceil(gustValue * KMH_TO_KTS_CONVERSION);
+        
+        sustainedLabel.textContent = "Sustained (kts)";
+        gustLabel.textContent = "Gust (kts)";
+        
+        currentUnitIsKmH = false;
+        ktBtn.classList.add('active');
+        kmhBtn.classList.remove('active');
+        toggleBackground.classList.add('kt');
+        updateMap();
+    }
+});
 
 loadGML();
 
@@ -391,7 +560,7 @@ function makeDraggable(elementId) {
     isDragging = true;
     offsetX = e.clientX - element.offsetLeft;
     offsetY = e.clientY - element.offsetTop;
-    e.preventDefault(); // Prevents unwanted text selection
+    e.preventDefault();
   });
 
   document.addEventListener('mousemove', (e) => {
@@ -406,8 +575,18 @@ function makeDraggable(elementId) {
   });
 }
 
-// Make the UI panels draggable
 makeDraggable('control-panel');
+
+const instructionsHeader = document.getElementById('instructions-header');
+const instructionsContent = document.getElementById('instructions-content');
+const chevronRight = document.getElementById('chevron-right');
+const chevronDown = document.getElementById('chevron-down');
+
+instructionsHeader.addEventListener('click', () => {
+  const isCollapsed = instructionsContent.classList.toggle('collapsed');
+  chevronRight.classList.toggle('hidden', !isCollapsed);
+  chevronDown.classList.toggle('hidden', isCollapsed);
+});
 </script>
 </body>
 </html>
